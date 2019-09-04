@@ -1,0 +1,27 @@
+optimizer:
+    lr: 1e-3
+    eps: 1e-5
+    clip_grad: 1
+
+model:
+    hidden_sizes: [32, 32]
+
+agent:
+    pi_clip: .2
+    gamma: .99
+    epochs: 4
+    batch_size: 64
+    ent_k: 0
+    val_loss_k: .001
+    gae_lambda: .95
+
+env:
+  name: CartPole-v0
+  num: 4
+
+train:
+    steps: 100
+    rollout_size: 128
+    log_every: 1
+    checkpoint_every: 100000
+    checkpoint_name: models/cartpole_{n_iter}.pt
