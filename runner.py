@@ -14,8 +14,8 @@ class EnvRunner:
     device: str
 
     encoder: Conv
-    emb_size: int = 64
-    emb_stack: int = 64
+    emb_size: int
+    emb_stack: int
 
     ep_reward = []
     ep_len = []

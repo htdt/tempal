@@ -19,7 +19,7 @@ class Agent:
     ent_k: float
     gamma: float
     gae_lambda: float
-    emb_stack: int = 64
+    emb_stack: int
 
     def _gae(self, rollout, last_val):
         m = rollout['masks'] * self.gamma
@@ -52,9 +52,14 @@ class Agent:
         adv, returns = self._gae(rollout, next_val)
 
         logs, grads = defaultdict(list), defaultdict(list)
-        for _ in range(self.epochs * num_step * num_env // self.batch_size):
-            idx1d = random.sample(range(num_step * num_env), self.batch_size)
-            idx = tuple(zip(*[(i % num_step, i // num_step) for i in idx1d]))
+
+        num_samples = self.epochs * num_step * num_env
+        idx1 = random.choices(range(num_step), k=num_samples)
+        idx2 = random.choices(range(num_env), k=num_samples)
+
+        for n_iter in range(num_samples // self.batch_size):
+            s = slice(n_iter * self.batch_size, (n_iter + 1) * self.batch_size)
+            idx = idx1[s], idx2[s]
             idx_emb = self._obs_emb_idx(idx)
 
             obs_emb = rollout['obs_emb'][idx_emb].view(

@@ -8,12 +8,12 @@ from common.tools import Flatten, init_ortho
 class ActorCritic(nn.Module):
     def __init__(
         self,
-        input_size: int,
         output_size: int,
         device: str,
+        emb_size: int,
+        emb_stack: int,
+        input_size: int = 4,
         hidden_size: int = 512,
-        emb_size: int = 64,
-        emb_stack: int = 64,
     ):
         super(ActorCritic, self).__init__()
         self.output_size = output_size
@@ -49,11 +49,9 @@ class ActorCritic(nn.Module):
 
 
 def init_model(cfg, env, device, resume):
-    obs_shape = env.observation_space.shape
     model = ActorCritic(
         output_size=env.action_space.n,
         device=device,
-        input_size=obs_shape[0],
     ).train()
     model.to(device=device)
 

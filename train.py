@@ -7,7 +7,7 @@ from common.make_env import make_vec_envs
 from common.cfg import load_cfg
 from common.logger import Logger
 from agent import Agent
-from model import init_model
+from model import ActorCritic
 from runner import EnvRunner
 from st_dim import STDIM
 
@@ -16,24 +16,33 @@ from st_dim import STDIM
 
 
 def train(cfg_name, resume):
+    emb_size = 32
+    emb_stack = 50
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
     envs = make_vec_envs(**cfg['env'])
-    model, n_start = init_model(cfg, envs, device, resume)
-    st_dim = STDIM(emb_size=64, device=device)
+    model = ActorCritic(output_size=envs.action_space.n,
+                        device=device, emb_size=emb_size, emb_stack=emb_stack)
+    model.train().to(device=device)
+    st_dim = STDIM(emb_size=emb_size, device=device)
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
         envs=envs,
         model=model,
         device=device,
-        encoder=st_dim.encoder)
+        encoder=st_dim.encoder,
+        emb_size=emb_size,
+        emb_stack=emb_stack)
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
-    agent = Agent(model=model, optim=optim, **cfg['agent'])
+    agent = Agent(model=model, optim=optim, emb_stack=emb_stack,
+        **cfg['agent'])
 
+    n_start = 0
     cp_iter = cfg['train']['checkpoint_every']
     log_iter = cfg['train']['log_every']
     n_end = cfg['train']['steps']
