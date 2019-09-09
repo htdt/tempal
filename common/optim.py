@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import List
 import torch
-from torch.optim import AdamW, Optimizer
-from torchcontrib.optim import SWA
 
 
 @dataclass
@@ -11,16 +9,19 @@ class ParamOptim:
     lr: float = 1e-3
     eps: float = 1e-8
     clip_grad: float = None
-    optimizer: Optimizer = AdamW
+    anneal: bool = True
 
     def __post_init__(self):
-        base_opt = self.optimizer(self.params, lr=self.lr, eps=self.eps)
-        self.optim = SWA(base_opt)
+        self.optim = torch.optim.Adam(self.params, lr=self.lr, eps=self.eps)
 
     def set_lr(self, lr):
         for pg in self.optim.param_groups:
             pg['lr'] = lr
         return lr
+
+    def update(self, progress):
+        if self.anneal:
+            self.set_lr(self.lr * (1 - progress))
 
     def step(self, loss):
         self.optim.zero_grad()

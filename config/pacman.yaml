@@ -1,7 +1,7 @@
 optimizer:
-    lr: 5e-5
+    lr: 2.5e-4
     eps: 1e-5
-    clip_grad: 1
+    clip_grad: .5
 
 conv:
     channels: [32, 64, 64]
@@ -14,19 +14,19 @@ model:
 agent:
     pi_clip: .1
     gamma: .99
-    epochs: 10
-    batch_size: 512
+    epochs: 4
+    batch_size: 256
     ent_k: .01
-    val_loss_k: .1
+    val_loss_k: 1
     gae_lambda: .95
 
 env:
     name: MsPacmanNoFrameskip-v4
-    num: 100
+    num: 8
 
 train:
-    steps: 20000
-    rollout_size: 64
+    steps: 10000
+    rollout_size: 128
     log_every: 1
-    checkpoint_every: 500
+    checkpoint_every: 1000
     checkpoint_name: models/pacman_{n_iter}.pt

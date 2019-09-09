@@ -1,56 +1,57 @@
-from typing import List
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from common.conv import Conv
 from common.cfg import find_checkpoint
+from common.tools import Flatten, init_ortho
 
 
 class ActorCritic(nn.Module):
     def __init__(
         self,
+        input_size: int,
         output_size: int,
         device: str,
-        input_size: int = None,
-        hidden_sizes: List[int] = None,
-        conv: Conv = None,
+        hidden_size: int = 512,
+        emb_size: int = 64,
+        emb_stack: int = 64,
     ):
         super(ActorCritic, self).__init__()
         self.output_size = output_size
         self.device = device
-        self.conv = conv
 
-        if conv is not None:
-            input_size = conv.output_size
-        assert input_size is not None
+        def with_relu(m):
+            return nn.Sequential(init_ortho(m, 'relu'), nn.ReLU())
 
-        if hidden_sizes is None:
-            self.fc = None
-        else:
-            self.fc = nn.Sequential(*[
-                nn.Sequential(nn.Linear(s_in, s_out), nn.ReLU())
-                for s_in, s_out in zip(
-                    [input_size] + hidden_sizes[:-1], hidden_sizes)])
-            input_size = hidden_sizes[-1]
+        self.conv = nn.Sequential(
+            with_relu(nn.Conv2d(input_size, 32, 8, 4)),
+            with_relu(nn.Conv2d(32, 64, 4, 2)),
+            with_relu(nn.Conv2d(64, 64, 3, 1)),
+            Flatten())
 
-        self.pi = nn.Linear(input_size, output_size)
-        self.val = nn.Linear(input_size, 1)
+        self.fc_emb = nn.Sequential(
+            Flatten(), with_relu(nn.Linear(emb_size * emb_stack, 512)))
 
-    def forward(self, x):
-        if self.conv is not None:
-            x = self.conv(x)
-        if self.fc is not None:
-            x = self.fc(x)
+        input_size = 64 * 7 * 7 + 512
+        self.fc = with_relu(nn.Linear(input_size, hidden_size))
+        self.pi = init_ortho(nn.Linear(hidden_size, output_size), .01)
+        self.val = init_ortho(nn.Linear(hidden_size, 1))
+
+    def forward(self, x, x_emb):
+        x = x.float() / 255.
+        x = self.conv(x)
+
+        x_emb = x_emb.permute(1, 0, 2).contiguous()
+        x_emb = self.fc_emb(x_emb)
+
+        x = torch.cat([x, x_emb], -1)
+        x = self.fc(x)
         return Categorical(logits=self.pi(x)), self.val(x)
 
 
 def init_model(cfg, env, device, resume):
     obs_shape = env.observation_space.shape
-    conv = Conv(**cfg['conv'], input_size=obs_shape) if 'conv' in cfg else None
     model = ActorCritic(
-        hidden_sizes=cfg['model'].get('hidden_sizes'),
         output_size=env.action_space.n,
-        conv=conv,
         device=device,
         input_size=obs_shape[0],
     ).train()

@@ -1,27 +1,57 @@
+from dataclasses import dataclass
 import torch
 from torch import nn
 import torch.nn.functional as F
+import random
+from common.optim import ParamOptim
+from common.tools import Flatten, init_ortho
 
 
+@dataclass
 class STDIM:
-    def __init__(self, feature_size, device='cpu'):
-        super().__init__()
-        self.encoder = Conv(feature_size=feature_size).to(device)
-        self.classifier1 = nn.Linear(feature_size, 128).to(device)
-        self.classifier2 = nn.Linear(128, 128).to(device)
+    device: str = 'cpu'
+    batch_size: int = 64
+    emb_size: int = 64
+    lr: float = 5e-4
+
+    def __post_init__(self):
+        self.encoder = Conv(emb_size=self.emb_size).to(self.device)
+        self.classifier1 = nn.Linear(self.emb_size, 64).to(self.device)
+        self.classifier2 = nn.Linear(64, 64).to(self.device)
         self.encoder.train()
         self.classifier1.train()
         self.classifier2.train()
-        self.device = device
+        self.target = torch.arange(self.batch_size).to(self.device)
 
-    def get_loss(self, x1, x2):
+        params = list(self.encoder.parameters()) +\
+            list(self.classifier1.parameters()) +\
+            list(self.classifier2.parameters())
+        self.optim = ParamOptim(lr=self.lr, params=params)
+
+    def update(self, obs, epochs=1):
+        obs = obs[:, :, -1:]  # use one last layer out of 4
+        losses = []
+        num_step = epochs * obs.shape[0] * obs.shape[1]
+
+        idx1 = random.choices(range(obs.shape[0] - 1), k=num_step)
+        idx2 = list(map(lambda x: x + 1, idx1))
+        idx_env = random.choices(range(obs.shape[1]), k=num_step)
+
+        for i in range(num_step // self.batch_size):
+            s = slice(i * self.batch_size, (i + 1) * self.batch_size)
+            x1 = obs[idx1[s], idx_env[s]]
+            x2 = obs[idx2[s], idx_env[s]]
+            loss = self.optim.step(self._get_loss(x1, x2))
+            losses.append(loss.item())
+
+        return {
+            'loss/st_dim': sum(losses) / len(losses)
+        }
+
+    def _get_loss(self, x1, x2):
         x1_loc, x1_glob = self.encoder(x1)
-        x2_loc = self.encoder.block1(x2)
-
-        batch_size = x1.shape[0]
+        x2_loc = self.encoder(x2, only_block1=True)
         sy, sx = x1_loc.shape[2:]
-        target = torch.arange(batch_size).to(self.device)
-
         loss = 0
         for y in range(sy):
             for x in range(sx):
@@ -29,51 +59,38 @@ class STDIM:
 
                 predictions = self.classifier1(x1_glob)
                 logits = torch.matmul(predictions, positive.t())
-                loss += F.cross_entropy(logits, target)
+                loss += F.cross_entropy(logits, self.target)
 
                 predictions = self.classifier2(x1_loc[:, :, y, x])
                 logits = torch.matmul(predictions, positive.t())
-                loss += F.cross_entropy(logits, target)
-
+                loss += F.cross_entropy(logits, self.target)
         return loss / (sx * sy)
 
 
-class Flatten(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)
-
-def OrthoConv(in_channels, out_channels, kernel_size, stride):
-    module = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride)
-    gain = nn.init.calculate_gain('relu')
-    nn.init.orthogonal_(module.weight.data, gain=gain)
-    nn.init.constant_(module.bias.data, 0)
-    return module
-
-def OrthoLinear(in_channels, out_channels):
-    module = nn.Linear(in_channels, out_channels)
-    nn.init.orthogonal_(module.weight.data, gain=1)
-    nn.init.constant_(module.bias.data, 0)
-    return module
-
 class Conv(nn.Module):
-    def __init__(self, feature_size):
+    def __init__(self, emb_size):
         super().__init__()
+        def conv(*args): return init_ortho(nn.Conv2d(*args), 'relu')
+        def fc(*args): return init_ortho(nn.Linear(*args))
+
+        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
+        # 64 * 7 * 7 = 3136
         self.block1 = nn.Sequential(
-            OrthoConv(1, 32, 8, stride=4),
+            init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
             nn.ReLU(),
-            OrthoConv(32, 64, 4, stride=2),
-            nn.ReLU(),
-            OrthoConv(64, 128, 4, stride=2))
-        
+            init_ortho(nn.Conv2d(32, 64, 4, 2), 'relu'))
+
         self.block2 = nn.Sequential(
             nn.ReLU(),
-            OrthoConv(128, 64, 3, stride=1),
+            init_ortho(nn.Conv2d(64, 64, 3, 1), 'relu'),
             nn.ReLU(),
             Flatten(),
-            OrthoLinear(64 * 9 * 6, feature_size),
-        )
+            init_ortho(nn.Linear(64 * 7 * 7, emb_size)))
 
-    def forward(self, x):
+    def forward(self, x, only_block1=False):
+        x = x.float() / 255
         b1 = self.block1(x)
+        if only_block1:
+            return b1
         b2 = self.block2(b1)
         return b1, b2

@@ -9,6 +9,10 @@ from common.logger import Logger
 from agent import Agent
 from model import init_model
 from runner import EnvRunner
+from st_dim import STDIM
+
+
+# TODO terminal mask on obs_emb
 
 
 def train(cfg_name, resume):
@@ -18,8 +22,15 @@ def train(cfg_name, resume):
     log = Logger(device=device)
     envs = make_vec_envs(**cfg['env'])
     model, n_start = init_model(cfg, envs, device, resume)
-    runner = EnvRunner(rollout_size=cfg['train']['rollout_size'],
-                       envs=envs, model=model, device=device)
+    st_dim = STDIM(emb_size=64, device=device)
+
+    runner = EnvRunner(
+        rollout_size=cfg['train']['rollout_size'],
+        envs=envs,
+        model=model,
+        device=device,
+        encoder=st_dim.encoder)
+
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
     agent = Agent(model=model, optim=optim, **cfg['agent'])
 
@@ -29,10 +40,14 @@ def train(cfg_name, resume):
     cp_name = cfg['train']['checkpoint_name']
 
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
-        agent_log = agent.update(rollout)
+        progress = n_iter / n_end
+        optim.update(progress)
+        st_dim.optim.update(progress)
+        agent_log = agent.update(rollout, progress)
+        emb_log = st_dim.update(rollout['obs'])
 
         if n_iter % log_iter == 0:
-            log.output({**agent_log, **runner.get_logs()}, n_iter)
+            log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)
 
         if n_iter > n_start and n_iter % cp_iter == 0:
             f = cp_name.format(n_iter=n_iter//cp_iter)

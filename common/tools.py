@@ -28,3 +28,16 @@ def onehot(x, num):
 
 class Identity(torch.nn.Module):
     def forward(self, x): return x
+
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        return x.view(x.size(0), -1)
+
+
+def init_ortho(module, gain=1):
+    if isinstance(gain, str):
+        gain = nn.init.calculate_gain(gain)
+    nn.init.orthogonal_(module.weight.data, gain=gain)
+    nn.init.constant_(module.bias.data, 0)
+    return module
