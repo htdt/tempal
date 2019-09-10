@@ -4,9 +4,9 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 32
-    stack: 32
-    use_rnn: False
+    size: 64
+    stack: 64
+    use_rnn: True
     method: iic
     epochs: 4
 
@@ -27,5 +27,5 @@ train:
     steps: 10000
     rollout_size: 128
     log_every: 1
-    checkpoint_every: 1000
-    checkpoint_name: models/pacman_{n_iter}.pt
+    checkpoint_every: 10000
+    checkpoint_name: models/iic64_rnn_{n_iter}.pt
