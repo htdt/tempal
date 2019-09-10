@@ -22,15 +22,14 @@ def train(cfg_name, resume):
     log = Logger(device=device)
     envs = make_vec_envs(**cfg['env'])
 
-    emb_size = cfg['embedding']['size']
-    emb_stack = cfg['embedding']['stack']
+    emb = cfg['embedding']
     model = ActorCritic(output_size=envs.action_space.n, device=device,
-                        emb_size=emb_size, emb_stack=emb_stack,
-                        use_rnn=cfg['embedding']['use_rnn'])
+                        emb_size=emb['size'], emb_stack=emb['stack'],
+                        use_rnn=emb['use_rnn'])
     model.train().to(device=device)
-    
-    emb_trainer = emb_trainers[cfg['embedding']['method']](
-        emb_size=emb_size, device=device)
+
+    emb_trainer = emb_trainers[emb['method']](
+        emb_size=emb['size'], epochs=emb.get('epochs', 1), device=device)
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
@@ -38,8 +37,8 @@ def train(cfg_name, resume):
         model=model,
         device=device,
         encoder=emb_trainer.encoder,
-        emb_size=emb_size,
-        emb_stack=emb_stack)
+        emb_size=emb['size'],
+        emb_stack=emb['stack'])
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
     agent = Agent(model=model, optim=optim, **cfg['agent'])

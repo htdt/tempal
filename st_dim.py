@@ -13,6 +13,7 @@ class STDIM:
     batch_size: int = 64
     emb_size: int = 64
     lr: float = 5e-4
+    epochs: int = 1
 
     def __post_init__(self):
         self.encoder = Conv(emb_size=self.emb_size).to(self.device)
@@ -28,10 +29,10 @@ class STDIM:
             list(self.classifier2.parameters())
         self.optim = ParamOptim(lr=self.lr, params=params)
 
-    def update(self, obs, epochs=1):
+    def update(self, obs):
         obs = obs[:, :, -1:]  # use one last layer out of 4
         losses = []
-        num_step = epochs * obs.shape[0] * obs.shape[1]
+        num_step = self.epochs * obs.shape[0] * obs.shape[1]
 
         idx1 = random.choices(range(obs.shape[0] - 1), k=num_step)
         idx2 = list(map(lambda x: x + 1, idx1))

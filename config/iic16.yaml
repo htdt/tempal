@@ -4,9 +4,9 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 256
-    stack: 64
-    use_rnn: True
+    size: 16
+    stack: 32
+    use_rnn: False
     method: iic
 
 agent:
