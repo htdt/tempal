@@ -41,3 +41,10 @@ def init_ortho(module, gain=1):
     nn.init.orthogonal_(module.weight.data, gain=gain)
     nn.init.constant_(module.bias.data, 0)
     return module
+
+def init_ortho_multi(module):
+    for name, param in module.named_parameters():
+        if 'bias' in name:
+            nn.init.constant_(param, 0)
+        elif 'weight' in name:
+            nn.init.orthogonal_(param)

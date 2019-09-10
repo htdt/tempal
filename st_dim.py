@@ -70,8 +70,6 @@ class STDIM:
 class Conv(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
-        def conv(*args): return init_ortho(nn.Conv2d(*args), 'relu')
-        def fc(*args): return init_ortho(nn.Linear(*args))
 
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
         # 64 * 7 * 7 = 3136

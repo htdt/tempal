@@ -10,37 +10,39 @@ from agent import Agent
 from model import ActorCritic
 from runner import EnvRunner
 from st_dim import STDIM
-
-
-# TODO terminal mask on obs_emb
+from iic import IIC
+emb_trainers = {'st-dim': STDIM, 'iic': IIC}
 
 
 def train(cfg_name, resume):
-    emb_size = 32
-    emb_stack = 50
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
     envs = make_vec_envs(**cfg['env'])
-    model = ActorCritic(output_size=envs.action_space.n,
-                        device=device, emb_size=emb_size, emb_stack=emb_stack)
+
+    emb_size = cfg['embedding']['size']
+    emb_stack = cfg['embedding']['stack']
+    model = ActorCritic(output_size=envs.action_space.n, device=device,
+                        emb_size=emb_size, emb_stack=emb_stack,
+                        use_rnn=cfg['embedding']['use_rnn'])
     model.train().to(device=device)
-    st_dim = STDIM(emb_size=emb_size, device=device)
+    
+    emb_trainer = emb_trainers[cfg['embedding']['method']](
+        emb_size=emb_size, device=device)
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
         envs=envs,
         model=model,
         device=device,
-        encoder=st_dim.encoder,
+        encoder=emb_trainer.encoder,
         emb_size=emb_size,
         emb_stack=emb_stack)
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
-    agent = Agent(model=model, optim=optim, emb_stack=emb_stack,
-        **cfg['agent'])
+    agent = Agent(model=model, optim=optim, **cfg['agent'])
 
     n_start = 0
     cp_iter = cfg['train']['checkpoint_every']
@@ -51,9 +53,9 @@ def train(cfg_name, resume):
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
         progress = n_iter / n_end
         optim.update(progress)
-        st_dim.optim.update(progress)
+        emb_trainer.optim.update(progress)
         agent_log = agent.update(rollout, progress)
-        emb_log = st_dim.update(rollout['obs'])
+        emb_log = emb_trainer.update(rollout['obs'])
 
         if n_iter % log_iter == 0:
             log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)

@@ -41,8 +41,8 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
-        obs_emb = torch.zeros(r + self.emb_stack, n,
-                              self.emb_size, device=self.device)
+        obs_emb = torch.zeros(r + 1, n, self.emb_stack, self.emb_size,
+                              device=self.device)
 
         rewards = tensor()
         vals = tensor()
@@ -53,12 +53,11 @@ class EnvRunner:
         step = 0
         obs[0] = self.envs.reset()
         with torch.no_grad():
-            obs_emb[self.emb_stack - 1] = self.encoder(obs[0, :, -1:])[1]
+            obs_emb[0, :, -1] = self.encoder(obs[0, :, -1:])[1]
 
         while True:
             with torch.no_grad():
-                dist, vals[step] = self.model(
-                    obs[step], obs_emb[step: step + self.emb_stack])
+                dist, vals[step] = self.model(obs[step], obs_emb[step])
                 a = dist.sample()
                 actions[step] = a.unsqueeze(-1)
                 log_probs[step] = dist.log_prob(a).unsqueeze(-1)
@@ -67,8 +66,10 @@ class EnvRunner:
                 self.envs.step(actions[step])
             masks[step] = ~terms
 
+            obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
+            obs_emb[step + 1] *= masks[step, ..., None]
             with torch.no_grad():
-                obs_emb[step + self.emb_stack] = self.encoder(
+                obs_emb[step + 1, :, -1] = self.encoder(
                     obs[step + 1, :, -1:])[1]
 
             for i, info in enumerate(infos):
@@ -87,4 +88,4 @@ class EnvRunner:
                        'masks': masks,
                        }
                 obs[0].copy_(obs[-1])
-                obs_emb[:self.emb_stack].copy_(obs_emb[-self.emb_stack:])
+                obs_emb[0].copy_(obs_emb[-1])

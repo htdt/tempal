@@ -3,13 +3,11 @@ optimizer:
     eps: 1e-5
     clip_grad: .5
 
-conv:
-    channels: [32, 64, 64]
-    kernel_size: [8, 4, 3]
-    stride: [4, 2, 1]
-
-model:
-    hidden_sizes: [512]
+embedding:
+    size: 32
+    stack: 32
+    use_rnn: False
+    method: iic
 
 agent:
     pi_clip: .1

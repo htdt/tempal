@@ -19,7 +19,6 @@ class Agent:
     ent_k: float
     gamma: float
     gae_lambda: float
-    emb_stack: int
 
     def _gae(self, rollout, last_val):
         m = rollout['masks'] * self.gamma
@@ -36,19 +35,12 @@ class Agent:
         adv = (adv - adv.mean()) / (adv.std() + 1e-8)
         return adv, returns
 
-    def _obs_emb_idx(self, idx):
-        idx0 = [i + n for n in range(self.emb_stack) for i in idx[0]]
-        idx1 = [i + 0 for _ in range(self.emb_stack) for i in idx[1]]
-        return idx0, idx1
-
     def update(self, rollout, progress=0):
         clip = self.pi_clip * (1 - progress)
         num_step, num_env = rollout['log_probs'].shape[:2]
         with torch.no_grad():
-            next_val = self.model(
-                rollout['obs'][-1],
-                rollout['obs_emb'][-self.emb_stack:],
-                )[1]
+            next_val = self.model(rollout['obs'][-1],
+                rollout['obs_emb'][-1])[1]
         adv, returns = self._gae(rollout, next_val)
 
         logs, grads = defaultdict(list), defaultdict(list)
@@ -60,11 +52,9 @@ class Agent:
         for n_iter in range(num_samples // self.batch_size):
             s = slice(n_iter * self.batch_size, (n_iter + 1) * self.batch_size)
             idx = idx1[s], idx2[s]
-            idx_emb = self._obs_emb_idx(idx)
 
-            obs_emb = rollout['obs_emb'][idx_emb].view(
-                self.emb_stack, self.batch_size, rollout['obs_emb'].shape[-1])
-            dist, vals = self.model(rollout['obs'][idx], obs_emb)
+            dist, vals = self.model(
+                rollout['obs'][idx], rollout['obs_emb'][idx])
             act = rollout['actions'][idx].squeeze(-1)
             log_probs = dist.log_prob(act).unsqueeze(-1)
             ent = dist.entropy().mean()

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 from common.cfg import find_checkpoint
-from common.tools import Flatten, init_ortho
+from common.tools import Flatten, init_ortho, init_ortho_multi
 
 
 class ActorCritic(nn.Module):
@@ -14,6 +14,7 @@ class ActorCritic(nn.Module):
         emb_stack: int,
         input_size: int = 4,
         hidden_size: int = 512,
+        use_rnn: bool = True,
     ):
         super(ActorCritic, self).__init__()
         self.output_size = output_size
@@ -27,12 +28,18 @@ class ActorCritic(nn.Module):
             with_relu(nn.Conv2d(32, 64, 4, 2)),
             with_relu(nn.Conv2d(64, 64, 3, 1)),
             Flatten())
+        conv_output = 64 * 7 * 7
 
-        self.fc_emb = nn.Sequential(
-            Flatten(), with_relu(nn.Linear(emb_size * emb_stack, 512)))
+        if use_rnn:
+            self.rnn = nn.GRU(emb_size, emb_size * 2, batch_first=True)
+            init_ortho_multi(self.rnn)
+            emb_output = emb_size * 2
+        else:
+            emb_output = emb_size * emb_stack
+            self.rnn = None
 
-        input_size = 64 * 7 * 7 + 512
-        self.fc = with_relu(nn.Linear(input_size, hidden_size))
+        input_size =  + emb_size * emb_stack
+        self.fc = with_relu(nn.Linear(conv_output + emb_output, hidden_size))
         self.pi = init_ortho(nn.Linear(hidden_size, output_size), .01)
         self.val = init_ortho(nn.Linear(hidden_size, 1))
 
@@ -40,8 +47,10 @@ class ActorCritic(nn.Module):
         x = x.float() / 255.
         x = self.conv(x)
 
-        x_emb = x_emb.permute(1, 0, 2).contiguous()
-        x_emb = self.fc_emb(x_emb)
+        if self.rnn is not None:
+            x_emb = self.rnn(x_emb)[0][:, -1]
+        else:
+            x_emb = x_emb.view(x_emb.shape[0], -1)
 
         x = torch.cat([x, x_emb], -1)
         x = self.fc(x)
