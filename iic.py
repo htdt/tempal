@@ -10,13 +10,15 @@ from common.tools import Flatten, init_ortho
 @dataclass
 class IIC:
     emb_size: int
+    aux_size: int = 64
+    n_step: int = 5
     device: str = 'cpu'
     batch_size: int = 256
     lr: float = 5e-4
     epochs: int = 1
 
     def __post_init__(self):
-        self.encoder = Encoder(emb_size=self.emb_size).to(self.device)
+        self.encoder = Encoder(self.emb_size, self.aux_size).to(self.device)
         self.encoder.train()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
 
@@ -25,14 +27,17 @@ class IIC:
         losses = []
         num_step = self.epochs * obs.shape[0] * obs.shape[1]
 
-        idx1 = random.choices(range(obs.shape[0] - 1), k=num_step)
-        idx2 = list(map(lambda x: x + 1, idx1))
+        def shift(x): return x + random.randrange(1, self.n_step + 1)
+        idx1 = random.choices(range(obs.shape[0] - self.n_step), k=num_step)
+        idx2 = list(map(shift, idx1))
         idx_env = random.choices(range(obs.shape[1]), k=num_step)
+
         for i in range(num_step // self.batch_size):
             s = slice(i * self.batch_size, (i + 1) * self.batch_size)
-            x1 = self.encoder(obs[idx1[s], idx_env[s]])
-            x2 = self.encoder(obs[idx2[s], idx_env[s]])
-            loss = self.optim.step(IID_loss(x1, x2))
+            x1, x1_aux = self.encoder(obs[idx1[s], idx_env[s]], True)
+            x2, x2_aux = self.encoder(obs[idx2[s], idx_env[s]], True)
+            loss = IID_loss(x1, x2) + IID_loss(x1_aux, x2_aux)
+            loss = self.optim.step(loss)
             losses.append(loss.item())
 
         return {
@@ -41,25 +46,34 @@ class IIC:
 
 
 class Encoder(nn.Module):
-    def __init__(self, emb_size):
+    def __init__(self, emb_size, aux_size):
         super().__init__()
 
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
         # 64 * 7 * 7 = 3136
-        self.net = nn.Sequential(
+        trunk_output = 64 * 7 * 7
+        self.trunk = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(32, 64, 4, 2), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(64, 64, 3, 1), 'relu'),
             nn.ReLU(),
-            Flatten(),
-            init_ortho(nn.Linear(64 * 7 * 7, emb_size)),
+            Flatten())
+
+        self.head = nn.Sequential(
+            init_ortho(nn.Linear(trunk_output, emb_size)),
             nn.Softmax(-1))
 
-    def forward(self, x):
+        self.head_aux = nn.Sequential(
+            init_ortho(nn.Linear(trunk_output, aux_size)),
+            nn.Softmax(-1))
+
+    def forward(self, x, return_aux=False):
         x = x.float() / 255
-        return self.net(x)
+        x = self.trunk(x)
+        h = self.head(x)
+        return (h, self.head_aux(x)) if return_aux else h
 
 
 # source
@@ -85,6 +99,7 @@ def IID_loss(x_out, x_tf_out, lamb=1.0, EPS=sys.float_info.epsilon):
 
     loss = loss.sum()
     return loss
+
 
 def compute_joint(x_out, x_tf_out):
     # produces variable that requires grad (since args require grad)

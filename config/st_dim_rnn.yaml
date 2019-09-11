@@ -4,10 +4,13 @@ optimizer:
     clip_grad: .5
 
 embedding:
+    method: st-dim
+    use_rnn: True
+    concat_actions: True
+    n_step: 1
     size: 256
     stack: 64
-    use_rnn: True
-    method: st-dim
+    epochs: 1
 
 agent:
     pi_clip: .1

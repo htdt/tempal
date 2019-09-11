@@ -4,10 +4,12 @@ optimizer:
     clip_grad: .5
 
 embedding:
+    method: iic
+    use_rnn: False
+    concat_actions: False
+    n_step: 5
     size: 16
     stack: 32
-    use_rnn: False
-    method: iic
     epochs: 4
 
 agent:

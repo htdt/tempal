@@ -23,13 +23,15 @@ def train(cfg_name, resume):
     envs = make_vec_envs(**cfg['env'])
 
     emb = cfg['embedding']
+    model_emb_size = emb['size'] + envs.action_space.n * emb['concat_actions']
     model = ActorCritic(output_size=envs.action_space.n, device=device,
-                        emb_size=emb['size'], emb_stack=emb['stack'],
+                        emb_size=model_emb_size, emb_stack=emb['stack'],
                         use_rnn=emb['use_rnn'])
     model.train().to(device=device)
 
     emb_trainer = emb_trainers[emb['method']](
-        emb_size=emb['size'], epochs=emb.get('epochs', 1), device=device)
+        emb_size=emb['size'], epochs=emb.get('epochs', 1),
+        n_step=emb['n_step'], device=device)
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
@@ -38,7 +40,9 @@ def train(cfg_name, resume):
         device=device,
         encoder=emb_trainer.encoder,
         emb_size=emb['size'],
-        emb_stack=emb['stack'])
+        emb_stack=emb['stack'],
+        concat_actions=emb['concat_actions'],
+    )
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
     agent = Agent(model=model, optim=optim, **cfg['agent'])

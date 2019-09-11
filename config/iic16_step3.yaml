@@ -4,10 +4,12 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 64
-    stack: 32
-    use_rnn: False
     method: iic
+    use_rnn: False
+    concat_actions: False
+    n_step: 3
+    size: 16
+    stack: 32
     epochs: 4
 
 agent:
@@ -28,4 +30,4 @@ train:
     rollout_size: 128
     log_every: 1
     checkpoint_every: 10000
-    checkpoint_name: models/iic64_{n_iter}.pt
+    checkpoint_name: models/iic16_{n_iter}.pt
