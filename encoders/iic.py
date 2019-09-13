@@ -23,23 +23,19 @@ class Encoder(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
-        trunk_output = 64 * 7 * 7
-        self.trunk = nn.Sequential(
+        self.net = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(32, 64, 4, 2), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(64, 64, 3, 1), 'relu'),
             nn.ReLU(),
-            Flatten())
-
-        self.head = nn.Sequential(
-            init_ortho(nn.Linear(trunk_output, emb_size)),
+            Flatten(),
+            init_ortho(nn.Linear(64 * 7 * 7, emb_size)),
             nn.Softmax(-1))
 
     def forward(self, x):
-        x = x.float() / 255
-        return self.head(self.trunk(x))
+        return self.net(x.float() / 255)
 
 
 # source
