@@ -6,44 +6,26 @@ from common.optim import ParamOptim
 from common.make_env import make_vec_envs
 from common.cfg import load_cfg
 from common.logger import Logger
-from agent import Agent
-from model import ActorCritic
-from runner import EnvRunner
-
-from encoders.st_dim import STDIM
-from encoders.iic import IIC
-from encoders.hybrid import Hybrid
-emb_trainers = {'st-dim': STDIM, 'iic': IIC, 'hybrid': Hybrid}
+from blank.agent import Agent
+from blank.model import ActorCritic
+from blank.runner import EnvRunner
 
 
 def train(cfg_name, resume):
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
     envs = make_vec_envs(**cfg['env'])
 
-    emb = cfg['embedding']
-    model_emb_size = emb['size'] + envs.action_space.n * emb['concat_actions']
-    model = ActorCritic(output_size=envs.action_space.n, device=device,
-                        emb_size=model_emb_size, emb_stack=emb['stack'],
-                        use_rnn=emb['use_rnn'])
+    model = ActorCritic(output_size=envs.action_space.n, device=device)
     model.train().to(device=device)
-
-    emb_trainer = emb_trainers[emb['method']](
-        emb_size=emb['size'], epochs=emb.get('epochs', 1),
-        n_step=emb['n_step'], device=device)
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
         envs=envs,
         model=model,
         device=device,
-        encoder=emb_trainer.encoder,
-        emb_size=emb['size'],
-        emb_stack=emb['stack'],
-        concat_actions=emb['concat_actions'],
     )
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
@@ -58,12 +40,10 @@ def train(cfg_name, resume):
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
         progress = n_iter / n_end
         optim.update(progress)
-        emb_trainer.optim.update(progress)
         agent_log = agent.update(rollout, progress)
-        emb_log = emb_trainer.update(rollout['obs'])
 
         if n_iter % log_iter == 0:
-            log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)
+            log.output({**agent_log, **runner.get_logs()}, n_iter)
 
         if n_iter > n_start and n_iter % cp_iter == 0:
             f = cp_name.format(n_iter=n_iter//cp_iter)

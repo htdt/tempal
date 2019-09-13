@@ -3,8 +3,6 @@ import torch
 import numpy as np
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
 from model import ActorCritic
-from encoders.iic import Encoder
-from common.tools import onehot
 
 
 @dataclass
@@ -13,11 +11,7 @@ class EnvRunner:
     model: ActorCritic
     rollout_size: int
     device: str
-
-    encoder: Encoder
-    emb_size: int
     emb_stack: int
-    concat_actions: bool
 
     ep_reward = []
     ep_len = []
@@ -43,10 +37,9 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
-        num_actions = self.envs.action_space.n if self.concat_actions else 0
         obs_emb = torch.zeros(
-            r + 1, n, self.emb_stack, self.emb_size + num_actions,
-            device=self.device)
+            r + 1, n, self.emb_stack, 1, 84, 84,
+            device=self.device, dtype=torch.uint8)
 
         rewards = tensor()
         vals = tensor()
@@ -56,8 +49,7 @@ class EnvRunner:
 
         step = 0
         obs[0] = self.envs.reset()
-        with torch.no_grad():
-            obs_emb[0, :, -1, :self.emb_size] = self.encoder(obs[0, :, -1:])
+        obs_emb[0, :, -1] = obs[0, :, -1:]
 
         while True:
             with torch.no_grad():
@@ -71,13 +63,9 @@ class EnvRunner:
             masks[step] = ~terms
 
             obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
-            obs_emb[step + 1] *= masks[step, ..., None]
-            with torch.no_grad():
-                obs_emb[step + 1, :, -1, :self.emb_size] = self.encoder(
-                    obs[step + 1, :, -1:])
-            if self.concat_actions:
-                obs_emb[step + 1, :, -1, self.emb_size:] = onehot(
-                    actions[step], self.envs.action_space.n)
+            obs_emb[step + 1] *= masks[step, ...,
+                                       None, None, None].to(dtype=torch.uint8)
+            obs_emb[step + 1, :, -1] = obs[step + 1, :, -1:]
 
             for i, info in enumerate(infos):
                 if 'episode' in info.keys():

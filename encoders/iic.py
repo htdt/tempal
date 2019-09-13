@@ -2,51 +2,33 @@ import sys
 from dataclasses import dataclass
 import torch
 from torch import nn
-import random
 from common.optim import ParamOptim
 from common.tools import Flatten, init_ortho
+from encoders.base import BaseEncoder
 
 
 @dataclass
-class IIC:
-    emb_size: int
-    aux_size: int = 64
-    n_step: int = 5
-    device: str = 'cpu'
-    batch_size: int = 256
-    lr: float = 5e-4
-    epochs: int = 1
-
+class IIC(BaseEncoder):
     def __post_init__(self):
-        self.encoder = Encoder(self.emb_size, self.aux_size).to(self.device)
+        self.use_aux_head = self.emb_size <= 32
+        aux_size = self.emb_size * 4 if self.use_aux_head else None
+        self.encoder = Encoder(self.emb_size, aux_size).to(self.device)
         self.encoder.train()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
 
-    def update(self, obs):
-        obs = obs[:, :, -1:]  # use one last layer out of 4
-        losses = []
-        num_step = self.epochs * obs.shape[0] * obs.shape[1]
-
-        def shift(x): return x + random.randrange(1, self.n_step + 1)
-        idx1 = random.choices(range(obs.shape[0] - self.n_step), k=num_step)
-        idx2 = list(map(shift, idx1))
-        idx_env = random.choices(range(obs.shape[1]), k=num_step)
-
-        for i in range(num_step // self.batch_size):
-            s = slice(i * self.batch_size, (i + 1) * self.batch_size)
-            x1, x1_aux = self.encoder(obs[idx1[s], idx_env[s]], True)
-            x2, x2_aux = self.encoder(obs[idx2[s], idx_env[s]], True)
+    def _step(self, x1, x2):
+        if self.use_aux_head:
+            x1, x1_aux = self.encoder.two_heads(x1)
+            x2, x2_aux = self.encoder.two_heads(x2)
             loss = IID_loss(x1, x2) + IID_loss(x1_aux, x2_aux)
-            loss = self.optim.step(loss)
-            losses.append(loss.item())
+        else:
+            loss = IID_loss(self.encoder(x1), self.encoder(x2))
 
-        return {
-            'loss/iic': sum(losses) / len(losses)
-        }
+        return self.optim.step(loss)
 
 
 class Encoder(nn.Module):
-    def __init__(self, emb_size, aux_size):
+    def __init__(self, emb_size, aux_size=None):
         super().__init__()
 
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
@@ -65,15 +47,21 @@ class Encoder(nn.Module):
             init_ortho(nn.Linear(trunk_output, emb_size)),
             nn.Softmax(-1))
 
-        self.head_aux = nn.Sequential(
-            init_ortho(nn.Linear(trunk_output, aux_size)),
-            nn.Softmax(-1))
+        if aux_size is not None:
+            self.head_aux = nn.Sequential(
+                init_ortho(nn.Linear(trunk_output, aux_size)),
+                nn.Softmax(-1))
+        else:
+            self.head_aux = None
 
-    def forward(self, x, return_aux=False):
+    def two_heads(self, x):
         x = x.float() / 255
         x = self.trunk(x)
-        h = self.head(x)
-        return (h, self.head_aux(x)) if return_aux else h
+        return self.head(x), self.head_aux(x)
+
+    def forward(self, x):
+        x = x.float() / 255
+        return self.head(self.trunk(x))
 
 
 # source

@@ -2,20 +2,13 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 import torch.nn.functional as F
-import random
 from common.optim import ParamOptim
 from common.tools import Flatten, init_ortho
+from encoders.base import BaseEncoder
 
 
 @dataclass
-class STDIM:
-    n_step: int = 1
-    device: str = 'cpu'
-    batch_size: int = 64
-    emb_size: int = 64
-    lr: float = 5e-4
-    epochs: int = 1
-
+class STDIM(BaseEncoder):
     def __post_init__(self):
         self.encoder = Conv(emb_size=self.emb_size).to(self.device)
         self.classifier1 = nn.Linear(self.emb_size, 64).to(self.device)
@@ -30,30 +23,9 @@ class STDIM:
             list(self.classifier2.parameters())
         self.optim = ParamOptim(lr=self.lr, params=params)
 
-    def update(self, obs):
-        obs = obs[:, :, -1:]  # use one last layer out of 4
-        losses = []
-        num_step = self.epochs * obs.shape[0] * obs.shape[1]
-
-        def shift(x): return x + random.randrange(1, self.n_step + 1)
-        idx1 = random.choices(range(obs.shape[0] - self.n_step), k=num_step)
-        idx2 = list(map(lambda x: x + 1, idx1))
-        idx_env = random.choices(range(obs.shape[1]), k=num_step)
-
-        for i in range(num_step // self.batch_size):
-            s = slice(i * self.batch_size, (i + 1) * self.batch_size)
-            x1 = obs[idx1[s], idx_env[s]]
-            x2 = obs[idx2[s], idx_env[s]]
-            loss = self.optim.step(self._get_loss(x1, x2))
-            losses.append(loss.item())
-
-        return {
-            'loss/st_dim': sum(losses) / len(losses)
-        }
-
-    def _get_loss(self, x1, x2):
-        x1_loc, x1_glob = self.encoder.blocks(x1)
-        x2_loc = self.encoder.block1(x2)
+    def _step(self, x1, x2):
+        x1_loc, x1_glob = self.encoder.forward_blocks(x1)
+        x2_loc = self.encoder.forward_block1(x2)
         sy, sx = x1_loc.shape[2:]
         loss = 0
         for y in range(sy):
@@ -67,7 +39,8 @@ class STDIM:
                 predictions = self.classifier2(x1_loc[:, :, y, x])
                 logits = torch.matmul(predictions, positive.t())
                 loss += F.cross_entropy(logits, self.target)
-        return loss / (sx * sy)
+        loss /= (sx * sy)
+        return self.optim.step(loss)
 
 
 class Conv(nn.Module):
@@ -88,11 +61,11 @@ class Conv(nn.Module):
             Flatten(),
             init_ortho(nn.Linear(64 * 7 * 7, emb_size)))
 
-    def block1(self, x):
+    def forward_block1(self, x):
         x = x.float() / 255
         return self.block1(x)
 
-    def blocks(self, x):
+    def forward_blocks(self, x):
         x = x.float() / 255
         b1 = self.block1(x)
         return b1, self.block2(b1)

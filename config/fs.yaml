@@ -4,13 +4,8 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    method: iic
-    use_rnn: False
-    concat_actions: False
-    n_step: 5
-    size: 16
-    stack: 100
-    epochs: 4
+    size: 256
+    stack: 32
 
 agent:
     pi_clip: .1
@@ -29,5 +24,5 @@ train:
     steps: 10000
     rollout_size: 128
     log_every: 1
-    checkpoint_every: 10000
-    checkpoint_name: models/iic16_{n_iter}.pt
+    checkpoint_every: 1000
+    checkpoint_name: models/pacman_{n_iter}.pt

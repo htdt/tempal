@@ -4,13 +4,13 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    method: iic
+    method: hybrid
     use_rnn: False
     concat_actions: False
-    n_step: 3
-    size: 16
+    n_step: 1
+    size: 32
     stack: 32
-    epochs: 4
+    epochs: 1
 
 agent:
     pi_clip: .1
