@@ -10,29 +10,19 @@ from encoders.base import BaseEncoder
 @dataclass
 class IIC(BaseEncoder):
     def __post_init__(self):
-        self.use_aux_head = self.emb_size <= 32
-        aux_size = self.emb_size * 4 if self.use_aux_head else None
-        self.encoder = Encoder(self.emb_size, aux_size).to(self.device)
+        self.encoder = Encoder(self.emb_size).to(self.device)
         self.encoder.train()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
 
     def _step(self, x1, x2):
-        if self.use_aux_head:
-            x1, x1_aux = self.encoder.two_heads(x1)
-            x2, x2_aux = self.encoder.two_heads(x2)
-            loss = IID_loss(x1, x2) + IID_loss(x1_aux, x2_aux)
-        else:
-            loss = IID_loss(self.encoder(x1), self.encoder(x2))
-
+        loss = IID_loss(self.encoder(x1), self.encoder(x2))
         return self.optim.step(loss)
 
 
 class Encoder(nn.Module):
-    def __init__(self, emb_size, aux_size=None):
+    def __init__(self, emb_size):
         super().__init__()
-
-        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
-        # 64 * 7 * 7 = 3136
+        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
         trunk_output = 64 * 7 * 7
         self.trunk = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
@@ -46,18 +36,6 @@ class Encoder(nn.Module):
         self.head = nn.Sequential(
             init_ortho(nn.Linear(trunk_output, emb_size)),
             nn.Softmax(-1))
-
-        if aux_size is not None:
-            self.head_aux = nn.Sequential(
-                init_ortho(nn.Linear(trunk_output, aux_size)),
-                nn.Softmax(-1))
-        else:
-            self.head_aux = None
-
-    def two_heads(self, x):
-        x = x.float() / 255
-        x = self.trunk(x)
-        return self.head(x), self.head_aux(x)
 
     def forward(self, x):
         x = x.float() / 255

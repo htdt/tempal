@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 import numpy as np
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
-from model import ActorCritic
+from ppo.model import ActorCritic
 
 
 @dataclass

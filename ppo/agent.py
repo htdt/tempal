@@ -5,7 +5,7 @@ import torch
 
 from common.optim import ParamOptim
 from common.tools import log_grads
-from model import ActorCritic
+from ppo.model import ActorCritic
 
 
 @dataclass

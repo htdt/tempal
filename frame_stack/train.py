@@ -6,7 +6,7 @@ from common.optim import ParamOptim
 from common.make_env import make_vec_envs
 from common.cfg import load_cfg
 from common.logger import Logger
-from agent import Agent
+from ppo.agent import Agent
 from frame_stack.model import ActorCritic
 from frame_stack.runner import EnvRunner
 

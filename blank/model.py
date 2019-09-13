@@ -8,12 +8,10 @@ class ActorCritic(nn.Module):
         self,
         output_size: int,
         device: str,
-        emb_size: int,
         input_size: int = 4,
         hidden_size: int = 512,
     ):
         super(ActorCritic, self).__init__()
-        self.output_size = output_size
         self.device = device
 
         def with_relu(m):

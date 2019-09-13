@@ -8,8 +8,8 @@ embedding:
     use_rnn: True
     concat_actions: False
     n_step: 1
-    size: 256
-    stack: 32
+    size: 128
+    stack: 100
     epochs: 1
 
 agent:

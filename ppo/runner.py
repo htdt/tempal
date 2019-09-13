@@ -2,8 +2,8 @@ from dataclasses import dataclass
 import torch
 import numpy as np
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
-from model import ActorCritic
-from encoders.iic import Encoder
+from ppo.model import ActorCritic
+from encoders.base import BaseEncoder
 from common.tools import onehot
 
 
@@ -14,7 +14,7 @@ class EnvRunner:
     rollout_size: int
     device: str
 
-    encoder: Encoder
+    encoder: BaseEncoder
     emb_size: int
     emb_stack: int
     concat_actions: bool

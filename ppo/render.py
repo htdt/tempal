@@ -4,7 +4,7 @@ from tqdm import trange
 import torch
 from common.make_env import make_vec_envs
 from common.cfg import load_cfg
-from model import init_model
+from ppo.model import init_model
 
 
 def render(cfg_name, steps):

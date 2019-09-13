@@ -10,9 +10,10 @@ from encoders.base import BaseEncoder
 @dataclass
 class STDIM(BaseEncoder):
     def __post_init__(self):
-        self.encoder = Conv(emb_size=self.emb_size).to(self.device)
-        self.classifier1 = nn.Linear(self.emb_size, 64).to(self.device)
-        self.classifier2 = nn.Linear(64, 64).to(self.device)
+        num_layer = 64
+        self.encoder = Conv(self.emb_size, num_layer).to(self.device)
+        self.classifier1 = nn.Linear(self.emb_size, num_layer).to(self.device)
+        self.classifier2 = nn.Linear(num_layer, num_layer).to(self.device)
         self.encoder.train()
         self.classifier1.train()
         self.classifier2.train()
@@ -44,22 +45,20 @@ class STDIM(BaseEncoder):
 
 
 class Conv(nn.Module):
-    def __init__(self, emb_size):
+    def __init__(self, emb_size, num_layer=64):
         super().__init__()
-
-        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7 ->
-        # 64 * 7 * 7 = 3136
+        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
         self.block1 = nn.Sequential(
-            init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
+            init_ortho(nn.Conv2d(1, num_layer // 2, 8, 4), 'relu'),
             nn.ReLU(),
-            init_ortho(nn.Conv2d(32, 64, 4, 2), 'relu'))
+            init_ortho(nn.Conv2d(num_layer // 2, num_layer, 4, 2), 'relu'))
 
         self.block2 = nn.Sequential(
             nn.ReLU(),
-            init_ortho(nn.Conv2d(64, 64, 3, 1), 'relu'),
+            init_ortho(nn.Conv2d(num_layer, num_layer, 3, 1), 'relu'),
             nn.ReLU(),
             Flatten(),
-            init_ortho(nn.Linear(64 * 7 * 7, emb_size)))
+            init_ortho(nn.Linear(num_layer * 7 * 7, emb_size)))
 
     def forward_block1(self, x):
         x = x.float() / 255
