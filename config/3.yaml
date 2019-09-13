@@ -6,11 +6,8 @@ optimizer:
 embedding:
     method: st-dim
     use_rnn: True
-    concat_actions: False
-    n_step: 1
-    size: 128
-    stack: 100
-    epochs: 1
+    size: 64
+    stack: 128
 
 agent:
     pi_clip: .1
