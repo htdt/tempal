@@ -28,20 +28,25 @@ class STDIM(BaseEncoder):
         x1_loc, x1_glob = self.encoder.forward_blocks(x1)
         x2_loc = self.encoder.forward_block1(x2)
         sy, sx = x1_loc.shape[2:]
-        loss = 0
+        loss_loc, loss_glob = 0, 0
         for y in range(sy):
             for x in range(sx):
                 positive = x2_loc[:, :, y, x]
 
                 predictions = self.classifier1(x1_glob)
                 logits = torch.matmul(predictions, positive.t())
-                loss += F.cross_entropy(logits, self.target)
+                loss_glob += F.cross_entropy(logits, self.target)
 
                 predictions = self.classifier2(x1_loc[:, :, y, x])
                 logits = torch.matmul(predictions, positive.t())
-                loss += F.cross_entropy(logits, self.target)
-        loss /= (sx * sy)
-        return self.optim.step(loss)
+                loss_loc += F.cross_entropy(logits, self.target)
+        loss_loc /= (sx * sy)
+        loss_glob /= (sx * sy)
+        return {
+            'sum': self.optim.step(loss_glob + loss_loc),
+            'glob': loss_glob,
+            'loc': loss_loc,
+        }
 
 
 class Conv(nn.Module):

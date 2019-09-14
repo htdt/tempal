@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import random
+from collections import defaultdict
 
 
 @dataclass
@@ -20,15 +21,18 @@ class BaseEncoder:
         idx2 = list(map(shift, idx1))
         idx_env = random.choices(range(obs.shape[1]), k=num_step)
 
-        losses = []
+        losses = defaultdict(list)
         for i in range(num_step // self.batch_size):
             s = slice(i * self.batch_size, (i + 1) * self.batch_size)
             x1 = obs[idx1[s], idx_env[s]]
             x2 = obs[idx2[s], idx_env[s]]
 
             loss = self._step(x1, x2)
-            losses.append(loss.item())
-        return {'loss/encoder': sum(losses) / len(losses)}
+            for k, v in loss.items():
+                losses[k].append(v.item())
+
+        return {f'loss/encoder/{k}': sum(v) / len(v)
+                for k, v in losses.items()}
 
     def _step(self, x1, x2):
         raise NotImplementedError

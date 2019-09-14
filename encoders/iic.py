@@ -15,27 +15,44 @@ class IIC(BaseEncoder):
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
 
     def _step(self, x1, x2):
-        loss = IID_loss(self.encoder(x1), self.encoder(x2))
-        return self.optim.step(loss)
+        heads = zip(self.encoder.forward_heads(x1),
+                    self.encoder.forward_heads(x2))
+        losses = {}
+        for i, (x1, x2) in enumerate(heads):
+            losses[f'head_{i}'] = IID_loss(x1, x2)
+        loss_mean = sum(losses.values()) / len(losses)
+        losses['mean'] = self.optim.step(loss_mean)
+        return losses
 
 
 class Encoder(nn.Module):
-    def __init__(self, emb_size):
+    def __init__(self, emb_size, num_heads=5):
         super().__init__()
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
-        self.net = nn.Sequential(
+        self.base = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(32, 64, 4, 2), 'relu'),
             nn.ReLU(),
             init_ortho(nn.Conv2d(64, 64, 3, 1), 'relu'),
             nn.ReLU(),
-            Flatten(),
-            init_ortho(nn.Linear(64 * 7 * 7, emb_size)),
-            nn.Softmax(-1))
+            Flatten())
 
-    def forward(self, x):
-        return self.net(x.float() / 255)
+        self.heads = [nn.Sequential(
+            nn.Linear(64 * 7 * 7, emb_size * (4 if i == 0 else 1)),
+            nn.Softmax(-1))
+            for i in range(num_heads + 1)]
+
+        for i, h in enumerate(self.heads):
+            setattr(self, f'heads_{i}', h)
+
+    def forward_heads(self, x):
+        x = self.base(x.float() / 255)
+        return map(lambda h: h(x), self.heads)
+
+    def forward(self, x, head=1):
+        x = self.base(x.float() / 255)
+        return self.heads[head](x)
 
 
 # source

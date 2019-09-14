@@ -6,10 +6,9 @@ optimizer:
 embedding:
     method: iic
     use_rnn: False
-    concat_actions: False
     size: 16
     stack: 50
-    epochs: 4
+    epochs: 10
 
 agent:
     pi_clip: .1

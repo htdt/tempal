@@ -12,8 +12,7 @@ from ppo.runner import EnvRunner
 
 from encoders.st_dim import STDIM
 from encoders.iic import IIC
-from encoders.hybrid import Hybrid
-emb_trainers = {'st-dim': STDIM, 'iic': IIC, 'hybrid': Hybrid}
+emb_trainers = {'st-dim': STDIM, 'iic': IIC}
 
 
 def train(cfg_name, resume):
