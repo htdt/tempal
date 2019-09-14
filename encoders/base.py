@@ -13,7 +13,7 @@ class BaseEncoder:
     epochs: int = 1
 
     def update(self, obs):
-        obs = obs[:, :, -1:]  # use one last layer out of 4
+        obs = obs[:, :, -1:]  # last frame out of 4
         num_step = self.epochs * obs.shape[0] * obs.shape[1]
 
         def shift(x): return x + random.randrange(1, self.n_step + 1)
@@ -31,7 +31,7 @@ class BaseEncoder:
             for k, v in loss.items():
                 losses[k].append(v.item())
 
-        return {f'loss/encoder/{k}': sum(v) / len(v)
+        return {f'encoder/{k}': sum(v) / len(v)
                 for k, v in losses.items()}
 
     def _step(self, x1, x2):

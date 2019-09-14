@@ -8,7 +8,7 @@ embedding:
     use_rnn: True
     size: 128
     stack: 50
-    epochs: 1
+    epochs: 4
 
 agent:
     pi_clip: .1
