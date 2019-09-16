@@ -11,7 +11,8 @@ class ActorCritic(nn.Module):
         output_size: int,
         device: str,
         emb_size: int,
-        emb_stack: int,
+        emb_stack_in: int,
+        emb_stack_out: int,
         input_size: int = 4,
         hidden_size: int = 512,
         use_rnn: bool = True,
@@ -33,12 +34,16 @@ class ActorCritic(nn.Module):
         if use_rnn:
             self.rnn = nn.GRU(emb_size, emb_size * 2, batch_first=True)
             init_ortho_multi(self.rnn)
-            emb_output = emb_size * 2
+            self.emb_output = emb_size * 2
         else:
-            emb_output = emb_size * emb_stack
+            self.conv2 = nn.Sequential(
+                with_relu(nn.Conv1d(emb_stack_in, emb_stack_out, 1)),
+                Flatten())
+            self.emb_output = emb_size * emb_stack_out
             self.rnn = None
 
-        self.fc = with_relu(nn.Linear(conv_output + emb_output, hidden_size))
+        self.fc = with_relu(
+            nn.Linear(conv_output + self.emb_output, hidden_size))
         self.pi = init_ortho(nn.Linear(hidden_size, output_size), .01)
         self.val = init_ortho(nn.Linear(hidden_size, 1))
 
@@ -46,10 +51,13 @@ class ActorCritic(nn.Module):
         x = x.float() / 255.
         x = self.conv(x)
 
-        if self.rnn is not None:
-            x_emb = self.rnn(x_emb)[0][:, -1]
+        if (x_emb == 0).all():
+            x_emb = torch.zeros(x.shape[0], self.emb_output).to(self.device)
         else:
-            x_emb = x_emb.view(x_emb.shape[0], -1)
+            if self.rnn is not None:
+                x_emb = self.rnn(x_emb)[0][:, -1]
+            else:
+                x_emb = self.conv2(x_emb)
 
         x = torch.cat([x, x_emb], -1)
         x = self.fc(x)

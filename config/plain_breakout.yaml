@@ -6,9 +6,11 @@ optimizer:
 embedding:
     method: iic
     use_rnn: False
-    size: 16
-    stack: 50
-    epochs: 4
+    size: 1
+    stack_in: 1
+    stack_out: 1
+    epochs: 0
+    pretrain: 2
 
 agent:
     pi_clip: .1
@@ -20,7 +22,7 @@ agent:
     gae_lambda: .95
 
 env:
-    name: MsPacmanNoFrameskip-v4
+    name: BreakoutNoFrameskip-v4
     num: 8
 
 train:

@@ -6,11 +6,11 @@ from collections import defaultdict
 @dataclass
 class BaseEncoder:
     emb_size: int
-    n_step: int = 1
+    n_step: int
+    batch_size: int
+    lr: float
+    epochs: int
     device: str = 'cpu'
-    batch_size: int = 256
-    lr: float = 5e-4
-    epochs: int = 1
 
     def update(self, obs):
         obs = obs[:, :, -1:]  # last frame out of 4

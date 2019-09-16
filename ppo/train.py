@@ -25,14 +25,24 @@ def train(cfg_name, resume):
     emb = cfg['embedding']
     concat_actions = emb.get('concat_actions', False)
     model_emb_size = emb['size'] + envs.action_space.n * concat_actions
-    model = ActorCritic(output_size=envs.action_space.n, device=device,
-                        emb_size=model_emb_size, emb_stack=emb['stack'],
-                        use_rnn=emb['use_rnn'])
+    model = ActorCritic(
+        output_size=envs.action_space.n,
+        device=device,
+        emb_size=model_emb_size,
+        emb_stack_in=emb['stack_in'],
+        emb_stack_out=emb['stack_out'],
+        use_rnn=emb['use_rnn']
+    )
     model.train().to(device=device)
 
     emb_trainer = emb_trainers[emb['method']](
-        emb_size=emb['size'], epochs=emb.get('epochs', 1),
-        n_step=emb.get('n_step', 1), device=device)
+        emb_size=emb['size'],
+        epochs=emb.get('epochs', 1),
+        n_step=emb.get('n_step', 1),
+        batch_size=emb.get('batch_size', 256),
+        lr=emb.get('lr', 1e-4),
+        device=device,
+    )
 
     runner = EnvRunner(
         rollout_size=cfg['train']['rollout_size'],
@@ -41,7 +51,7 @@ def train(cfg_name, resume):
         device=device,
         encoder=emb_trainer.encoder,
         emb_size=emb['size'],
-        emb_stack=emb['stack'],
+        emb_stack=emb['stack_in'],
         concat_actions=concat_actions,
     )
 
@@ -54,8 +64,16 @@ def train(cfg_name, resume):
     n_end = cfg['train']['steps']
     cp_name = cfg['train']['checkpoint_name']
 
+    log.log.add_text('hparams', str(emb))
+
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
         progress = n_iter / n_end
+
+        if emb['method'] == 'iic' and progress >= emb['pretrain'] and\
+                emb_trainer.encoder.head_main is None:
+            head_id = emb_trainer.select_head()
+            log.log.add_text('iic', f'head {head_id}', n_iter)
+
         optim.update(progress)
         emb_trainer.optim.update(progress)
         agent_log = agent.update(rollout, progress)

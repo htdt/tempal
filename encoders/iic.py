@@ -1,5 +1,6 @@
 import sys
 from dataclasses import dataclass
+from collections import deque
 import torch
 from torch import nn
 from common.optim import ParamOptim
@@ -10,24 +11,35 @@ from encoders.base import BaseEncoder
 @dataclass
 class IIC(BaseEncoder):
     def __post_init__(self):
-        self.encoder = Encoder(self.emb_size).to(self.device)
+        num_heads = 6
+        self.encoder = Encoder(self.emb_size, num_heads).to(self.device)
         self.encoder.train()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
+        self.head_loss = [deque(maxlen=256) for _ in range(num_heads)]
 
     def _step(self, x1, x2):
         heads = zip(self.encoder.forward_heads(x1),
                     self.encoder.forward_heads(x2))
         losses = {}
         for i, (x1, x2) in enumerate(heads):
-            losses[f'head_{i}'] = IID_loss(x1, x2)
+            losses[f'head_{i}'] = loss = IID_loss(x1, x2)
+            self.head_loss[i].append(loss.item())
         loss_mean = sum(losses.values()) / len(losses)
         losses['mean'] = self.optim.step(loss_mean)
         return losses
 
+    def select_head(self):
+        x = torch.tensor(self.head_loss).mean(-1)
+        x[0] = 1  # 0 head is auxiliary
+        self.encoder.head_main = x.argmin().item()
+        return self.encoder.head_main
+
 
 class Encoder(nn.Module):
-    def __init__(self, emb_size, num_heads=5):
+    def __init__(self, emb_size, num_heads):
         super().__init__()
+        self.emb_size = emb_size
+        
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
         self.base = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),
@@ -39,20 +51,25 @@ class Encoder(nn.Module):
             Flatten())
 
         self.heads = [nn.Sequential(
-            nn.Linear(64 * 7 * 7, emb_size * (4 if i == 0 else 1)),
+            nn.Linear(64 * 7 * 7, emb_size * (5 if i == 0 else 1)),
             nn.Softmax(-1))
-            for i in range(num_heads + 1)]
+            for i in range(num_heads)]
 
         for i, h in enumerate(self.heads):
             setattr(self, f'heads_{i}', h)
+
+        self.head_main = None
 
     def forward_heads(self, x):
         x = self.base(x.float() / 255)
         return map(lambda h: h(x), self.heads)
 
-    def forward(self, x, head=1):
+    def forward(self, x):
+        if self.head_main is None:
+            return 0
+
         x = self.base(x.float() / 255)
-        return self.heads[head](x)
+        return self.heads[self.head_main](x)
 
 
 # source
