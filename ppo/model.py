@@ -36,8 +36,8 @@ class ActorCritic(nn.Module):
             init_ortho_multi(self.rnn)
             self.emb_output = emb_size * 2
         else:
-            self.conv2 = nn.Sequential(
-                with_relu(nn.Conv1d(emb_stack_in, emb_stack_out, 1)),
+            self.emb_pool = nn.Sequential(
+                nn.AvgPool1d(8, stride=8),
                 Flatten())
             self.emb_output = emb_size * emb_stack_out
             self.rnn = None
@@ -57,7 +57,8 @@ class ActorCritic(nn.Module):
             if self.rnn is not None:
                 x_emb = self.rnn(x_emb)[0][:, -1]
             else:
-                x_emb = self.conv2(x_emb)
+                # batch x stack x size -> batch x size x stack/8
+                x_emb = self.emb_pool(x_emb.permute(0, 2, 1))
 
         x = torch.cat([x, x_emb], -1)
         x = self.fc(x)

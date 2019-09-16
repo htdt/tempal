@@ -8,7 +8,7 @@ embedding:
     use_rnn: False
     size: 32
     stack_in: 64
-    stack_out: 4
+    stack_out: 8
     epochs: 10
     batch_size: 512
     n_step: 3

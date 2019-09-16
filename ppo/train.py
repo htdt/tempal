@@ -9,6 +9,7 @@ from common.logger import Logger
 from ppo.agent import Agent
 from ppo.model import ActorCritic
 from ppo.runner import EnvRunner
+from ppo.eval import eval_model
 
 from encoders.st_dim import STDIM
 from encoders.iic import IIC
@@ -23,12 +24,10 @@ def train(cfg_name, resume):
     envs = make_vec_envs(**cfg['env'])
 
     emb = cfg['embedding']
-    concat_actions = emb.get('concat_actions', False)
-    model_emb_size = emb['size'] + envs.action_space.n * concat_actions
     model = ActorCritic(
         output_size=envs.action_space.n,
         device=device,
-        emb_size=model_emb_size,
+        emb_size=emb['size'],
         emb_stack_in=emb['stack_in'],
         emb_stack_out=emb['stack_out'],
         use_rnn=emb['use_rnn']
@@ -52,7 +51,6 @@ def train(cfg_name, resume):
         encoder=emb_trainer.encoder,
         emb_size=emb['size'],
         emb_stack=emb['stack_in'],
-        concat_actions=concat_actions,
     )
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
@@ -86,6 +84,12 @@ def train(cfg_name, resume):
             f = cp_name.format(n_iter=n_iter//cp_iter)
             dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
             torch.save(dump, f)
+
+    reward = eval_model(model, envs, emb_trainer.encoder,
+                        emb['stack_in'], emb['size'], device, 10)
+    reward_str = f'{reward.mean():.2f} ± {reward.std():.2f}'
+    log.log.add_text('final', reward_str)
+    log.log.close()
 
 
 if __name__ == '__main__':

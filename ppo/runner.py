@@ -4,7 +4,6 @@ import numpy as np
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
 from ppo.model import ActorCritic
 from encoders.base import BaseEncoder
-from common.tools import onehot
 
 
 @dataclass
@@ -17,7 +16,6 @@ class EnvRunner:
     encoder: BaseEncoder
     emb_size: int
     emb_stack: int
-    concat_actions: bool
 
     ep_reward = []
     ep_len = []
@@ -43,10 +41,8 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
-        num_actions = self.envs.action_space.n if self.concat_actions else 0
-        obs_emb = torch.zeros(
-            r + 1, n, self.emb_stack, self.emb_size + num_actions,
-            device=self.device)
+        obs_emb = torch.zeros(r + 1, n, self.emb_stack, self.emb_size,
+                              device=self.device)
 
         rewards = tensor()
         vals = tensor()
@@ -57,7 +53,7 @@ class EnvRunner:
         step = 0
         obs[0] = self.envs.reset()
         with torch.no_grad():
-            obs_emb[0, :, -1, :self.emb_size] = self.encoder(obs[0, :, -1:])
+            obs_emb[0, :, -1] = self.encoder(obs[0, :, -1:])
 
         while True:
             with torch.no_grad():
@@ -73,13 +69,9 @@ class EnvRunner:
             obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
             obs_emb[step + 1] *= masks[step, ..., None]
             with torch.no_grad():
-                obs_emb[step + 1, :, -1, :self.emb_size] = self.encoder(
-                    obs[step + 1, :, -1:])
-            if self.concat_actions:
-                obs_emb[step + 1, :, -1, self.emb_size:] = onehot(
-                    actions[step], self.envs.action_space.n)
+                obs_emb[step + 1, :, -1] = self.encoder(obs[step + 1, :, -1:])
 
-            for i, info in enumerate(infos):
+            for info in infos:
                 if 'episode' in info.keys():
                     self.ep_reward.append(info['episode']['r'])
                     self.ep_len.append(info['episode']['l'])

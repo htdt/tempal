@@ -15,7 +15,7 @@ embedding:
 agent:
     pi_clip: .1
     gamma: .99
-    epochs: 4
+    epochs: 3
     batch_size: 256
     ent_k: .01
     val_loss_k: 1
@@ -26,8 +26,8 @@ env:
     num: 8
 
 train:
-    steps: 10000
+    steps: 9766 # 10M / (128 * 8)
     rollout_size: 128
     log_every: 1
     checkpoint_every: 10000
-    checkpoint_name: models/iic_{n_iter}.pt
+    checkpoint_name: models/{n_iter}.pt
