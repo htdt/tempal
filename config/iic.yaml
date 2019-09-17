@@ -6,7 +6,7 @@ optimizer:
 embedding:
     method: iic
     use_rnn: False
-    size: 16
+    size: 32
     stack_in: 64
     stack_out: 8
     epochs: 10
@@ -18,7 +18,7 @@ embedding:
 agent:
     pi_clip: .1
     gamma: .99
-    epochs: 4
+    epochs: 3
     batch_size: 256
     ent_k: .01
     val_loss_k: 1
@@ -29,7 +29,7 @@ env:
     num: 8
 
 train:
-    steps: 10000
+    steps: 9766 # 10M / (128 * 8)
     rollout_size: 128
     log_every: 1
     checkpoint_every: 10000
