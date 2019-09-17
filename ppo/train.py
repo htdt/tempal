@@ -1,6 +1,6 @@
-import sys
 import torch
 from tqdm import trange
+import argparse
 
 from common.optim import ParamOptim
 from common.make_env import make_vec_envs
@@ -10,31 +10,23 @@ from ppo.agent import Agent
 from ppo.model import ActorCritic
 from ppo.runner import EnvRunner
 from ppo.eval import eval_model
-
-from encoders.st_dim import STDIM
 from encoders.iic import IIC
-emb_trainers = {'st-dim': STDIM, 'iic': IIC}
 
 
-def train(cfg_name, resume):
+def train(cfg_name, env_name):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
-    envs = make_vec_envs(**cfg['env'])
+    env_name += 'NoFrameskip-v4'
+    envs = make_vec_envs(name=env_name, num=cfg['train']['num_env'])
 
     emb = cfg['embedding']
     model = ActorCritic(
-        output_size=envs.action_space.n,
-        device=device,
-        emb_size=emb['size'],
-        emb_stack_in=emb['stack_in'],
-        emb_stack_out=emb['stack_out'],
-        use_rnn=emb['use_rnn']
-    )
+        output_size=envs.action_space.n, device=device, emb_size=emb['size'])
     model.train().to(device=device)
 
-    emb_trainer = emb_trainers[emb['method']](
+    emb_trainer = IIC(
         emb_size=emb['size'],
         epochs=emb.get('epochs', 1),
         n_step=emb.get('n_step', 1),
@@ -50,7 +42,7 @@ def train(cfg_name, resume):
         device=device,
         encoder=emb_trainer.encoder,
         emb_size=emb['size'],
-        emb_stack=emb['stack_in'],
+        history_size=emb['history_size'],
     )
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
@@ -62,12 +54,13 @@ def train(cfg_name, resume):
     n_end = cfg['train']['steps']
     cp_name = cfg['train']['checkpoint_name']
 
+    log.log.add_text('env', env_name)
     log.log.add_text('hparams', str(emb))
 
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
         progress = n_iter / n_end
 
-        if emb['method'] == 'iic' and progress >= emb['pretrain'] and\
+        if progress >= emb['pretrain'] and\
                 emb_trainer.encoder.head_main is None:
             head_id = emb_trainer.select_head()
             log.log.add_text('iic', f'head {head_id}', n_iter)
@@ -86,13 +79,17 @@ def train(cfg_name, resume):
             torch.save(dump, f)
 
     reward = eval_model(model, envs, emb_trainer.encoder,
-                        emb['stack_in'], emb['size'], device, 10)
+                        emb['history_size'], emb['size'], device)
     reward_str = f'{reward.mean():.2f} ± {reward.std():.2f}'
     log.log.add_text('final', reward_str)
     log.log.close()
 
 
 if __name__ == '__main__':
-    assert len(sys.argv) in [2, 3], 'config name required'
-    resume = len(sys.argv) == 3 and sys.argv[2] == 'resume'
-    train(sys.argv[1], resume)
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--cfg', type=str, default='plain')
+    parser.add_argument('--env', type=str, default='MsPacman', choices=[
+                        'MsPacman', 'SpaceInvaders', 'Breakout', 'Gravitar',
+                        'QBert', 'Seaquest', 'Enduro', 'MontezumaRevenge'])
+    args = parser.parse_args()
+    train(args.cfg, args.env)

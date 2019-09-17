@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from common.cfg import find_checkpoint
-from common.tools import Flatten, init_ortho, init_ortho_multi
+from common.tools import Flatten, init_ortho
 
 
 class ActorCritic(nn.Module):
@@ -11,11 +10,8 @@ class ActorCritic(nn.Module):
         output_size: int,
         device: str,
         emb_size: int,
-        emb_stack_in: int,
-        emb_stack_out: int,
         input_size: int = 4,
         hidden_size: int = 512,
-        use_rnn: bool = True,
     ):
         super(ActorCritic, self).__init__()
         self.output_size = output_size
@@ -31,16 +27,13 @@ class ActorCritic(nn.Module):
             Flatten())
         conv_output = 64 * 7 * 7
 
-        if use_rnn:
-            self.rnn = nn.GRU(emb_size, emb_size * 2, batch_first=True)
-            init_ortho_multi(self.rnn)
-            self.emb_output = emb_size * 2
-        else:
-            self.emb_conv = nn.Sequential(
-                with_relu(nn.Conv1d(emb_stack_in, emb_stack_out, 1)),
-                Flatten())
-            self.emb_output = emb_size * emb_stack_out
-            self.rnn = None
+        # embedding: batch x history x emb_size
+        self.emb_conv = nn.Sequential(
+            nn.Conv2d(1, 4, (8, 1), (4, 1)),
+            nn.Conv2d(4, 4, (4, 1), (2, 1)),
+            nn.Conv2d(4, 4, (3, 1), (2, 1)),
+            Flatten())
+        self.emb_output = emb_size * 4 * 2
 
         self.fc = with_relu(
             nn.Linear(conv_output + self.emb_output, hidden_size))
@@ -54,29 +47,8 @@ class ActorCritic(nn.Module):
         if (x_emb == 0).all():
             x_emb = torch.zeros(x.shape[0], self.emb_output).to(self.device)
         else:
-            if self.rnn is not None:
-                x_emb = self.rnn(x_emb)[0][:, -1]
-            else:
-                # batch x stack x size -> batch x size x stack/8
-                x_emb = self.emb_conv(x_emb)
+            x_emb = self.emb_conv(x_emb.unsqueeze(1))
 
         x = torch.cat([x, x_emb], -1)
         x = self.fc(x)
         return Categorical(logits=self.pi(x)), self.val(x)
-
-
-def init_model(cfg, env, device, resume):
-    model = ActorCritic(
-        output_size=env.action_space.n,
-        device=device,
-    ).train()
-    model.to(device=device)
-
-    if resume:
-        n_start, fname = find_checkpoint(cfg)
-        if fname:
-            model.load_state_dict(torch.load(fname, map_location=device))
-    else:
-        n_start = 0
-
-    return model, n_start

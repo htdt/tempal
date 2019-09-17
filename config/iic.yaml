@@ -4,11 +4,8 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    method: iic
-    use_rnn: False
     size: 32
-    stack_in: 64
-    stack_out: 8
+    history_size: 64
     epochs: 10
     batch_size: 512
     n_step: 3
@@ -24,13 +21,10 @@ agent:
     val_loss_k: 1
     gae_lambda: .95
 
-env:
-    name: MsPacmanNoFrameskip-v4
-    num: 8
-
 train:
     steps: 9766 # 10M / (128 * 8)
     rollout_size: 128
+    num_env: 8
     log_every: 1
     checkpoint_every: 10000
     checkpoint_name: models/iic_{n_iter}.pt

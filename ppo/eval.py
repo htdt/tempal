@@ -8,7 +8,7 @@ def eval_model(
     model: ActorCritic,
     env: ShmemVecEnv,
     encoder: Encoder,
-    emb_stack: int,
+    history_size: int,
     emb_size: int,
     device: str,
     num_ep=100
@@ -16,7 +16,8 @@ def eval_model(
     model.eval()
     encoder.eval()
 
-    obs_emb = torch.zeros(env.num_envs, emb_stack, emb_size).to(device=device)
+    obs_emb = torch.zeros(env.num_envs, history_size,
+                          emb_size).to(device=device)
     obs = env.reset().to(device=device)
     with torch.no_grad():
         obs_emb[:, -1] = encoder(obs[:, -1:])

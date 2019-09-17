@@ -15,7 +15,7 @@ class EnvRunner:
 
     encoder: BaseEncoder
     emb_size: int
-    emb_stack: int
+    history_size: int
 
     ep_reward = []
     ep_len = []
@@ -41,7 +41,7 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
-        obs_emb = torch.zeros(r + 1, n, self.emb_stack, self.emb_size,
+        obs_emb = torch.zeros(r + 1, n, self.history_size, self.emb_size,
                               device=self.device)
 
         rewards = tensor()

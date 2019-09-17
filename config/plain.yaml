@@ -4,25 +4,24 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 256
-    stack: 32
+    size: 1
+    history_size: 1
+    epochs: 0
+    pretrain: 2
 
 agent:
     pi_clip: .1
     gamma: .99
-    epochs: 4
+    epochs: 3
     batch_size: 256
     ent_k: .01
     val_loss_k: 1
     gae_lambda: .95
 
-env:
-    name: MsPacmanNoFrameskip-v4
-    num: 8
-
 train:
-    steps: 10000
+    steps: 9766 # 10M / (128 * 8)
     rollout_size: 128
+    num_env: 8
     log_every: 1
-    checkpoint_every: 1000
-    checkpoint_name: models/pacman_{n_iter}.pt
+    checkpoint_every: 10000
+    checkpoint_name: models/iic_{n_iter}.pt
