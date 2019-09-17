@@ -4,8 +4,8 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 32
-    history_size: 64
+    size: 16
+    history_size: 50
     hidden_size: 64
     epochs: 10
     batch_size: 512
