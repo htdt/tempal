@@ -9,7 +9,9 @@ class ActorCritic(nn.Module):
         self,
         output_size: int,
         device: str,
-        emb_size: int,
+        emb_size: int = 32,
+        history_size: int = 64,
+        emb_hidden_size: int = 64,
         input_size: int = 4,
         hidden_size: int = 512,
     ):
@@ -27,13 +29,12 @@ class ActorCritic(nn.Module):
             Flatten())
         conv_output = 64 * 7 * 7
 
-        # embedding: batch x history x emb_size
-        self.emb_conv = nn.Sequential(
-            nn.Conv2d(1, 4, (8, 1), (4, 1)),
-            nn.Conv2d(4, 4, (4, 1), (2, 1)),
-            nn.Conv2d(4, 4, (3, 1), (2, 1)),
-            Flatten())
-        self.emb_output = emb_size * 4 * 2
+        # embedding: batch x history=64 x emb_size=32
+        self.emb_fc = nn.Sequential(
+            Flatten(),
+            with_relu(nn.Linear(emb_size * history_size, emb_hidden_size))
+        )
+        self.emb_output = emb_hidden_size
 
         self.fc = with_relu(
             nn.Linear(conv_output + self.emb_output, hidden_size))
@@ -47,7 +48,7 @@ class ActorCritic(nn.Module):
         if (x_emb == 0).all():
             x_emb = torch.zeros(x.shape[0], self.emb_output).to(self.device)
         else:
-            x_emb = self.emb_conv(x_emb.unsqueeze(1))
+            x_emb = self.emb_fc(x_emb)
 
         x = torch.cat([x, x_emb], -1)
         x = self.fc(x)

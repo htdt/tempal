@@ -6,6 +6,7 @@ optimizer:
 embedding:
     size: 32
     history_size: 64
+    hidden_size: 64
     epochs: 10
     batch_size: 512
     n_step: 3

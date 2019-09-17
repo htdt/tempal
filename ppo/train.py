@@ -23,7 +23,12 @@ def train(cfg_name, env_name):
 
     emb = cfg['embedding']
     model = ActorCritic(
-        output_size=envs.action_space.n, device=device, emb_size=emb['size'])
+        output_size=envs.action_space.n,
+        device=device,
+        emb_size=emb['size'],
+        history_size=emb['history_size'],
+        emb_hidden_size=emb['hidden_size'],
+    )
     model.train().to(device=device)
 
     emb_trainer = IIC(
