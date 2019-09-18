@@ -27,7 +27,7 @@ def train(cfg_name, env_name):
         device=device,
         emb_size=emb['size'],
         history_size=emb['history_size'],
-        emb_hidden_size=emb['hidden_size'],
+        emb_hidden_size=emb.get('hidden_size'),
     )
     model.train().to(device=device)
 

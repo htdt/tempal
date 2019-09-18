@@ -11,7 +11,7 @@ class ActorCritic(nn.Module):
         device: str,
         emb_size: int = 32,
         history_size: int = 64,
-        emb_hidden_size: int = 64,
+        emb_hidden_size: int = None,
         input_size: int = 4,
         hidden_size: int = 512,
     ):
@@ -29,12 +29,15 @@ class ActorCritic(nn.Module):
             Flatten())
         conv_output = 64 * 7 * 7
 
-        # embedding: batch x history=64 x emb_size=32
-        self.emb_fc = nn.Sequential(
-            Flatten(),
-            with_relu(nn.Linear(emb_size * history_size, emb_hidden_size))
-        )
-        self.emb_output = emb_hidden_size
+        if emb_hidden_size is not None:
+            self.emb_fc = nn.Sequential(
+                Flatten(),
+                with_relu(nn.Linear(emb_size * history_size, emb_hidden_size))
+            )
+            self.emb_output = emb_hidden_size
+        else:
+            self.emb_fc = Flatten()
+            self.emb_output = emb_size * history_size
 
         self.fc = with_relu(
             nn.Linear(conv_output + self.emb_output, hidden_size))
