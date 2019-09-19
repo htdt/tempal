@@ -1,6 +1,7 @@
+import argparse
+import time
 import torch
 from tqdm import trange
-import argparse
 
 from common.optim import ParamOptim
 from common.make_env import make_vec_envs
@@ -54,10 +55,8 @@ def train(cfg_name, env_name):
     agent = Agent(model=model, optim=optim, **cfg['agent'])
 
     n_start = 0
-    cp_iter = cfg['train']['checkpoint_every']
     log_iter = cfg['train']['log_every']
     n_end = cfg['train']['steps']
-    cp_name = cfg['train']['checkpoint_name']
 
     log.log.add_text('env', env_name)
     log.log.add_text('hparams', str(emb))
@@ -78,10 +77,10 @@ def train(cfg_name, env_name):
         if (n_iter + 1) % log_iter == 0:
             log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)
 
-        if (n_iter + 1) % cp_iter == 0:
-            f = cp_name.format(n_iter=n_iter//cp_iter)
-            dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
-            torch.save(dump, f)
+    filename = f'models/{int(time.time())}.pt'
+    dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
+    torch.save(dump, filename)
+    log.log.add_text('filename', filename)
 
     reward = eval_model(model, envs, emb_trainer.encoder,
                         emb['history_size'], emb['size'], device)

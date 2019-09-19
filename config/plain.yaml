@@ -24,5 +24,3 @@ train:
     rollout_size: 128
     num_env: 8
     log_every: 1
-    checkpoint_every: 10000
-    checkpoint_name: models/iic_{n_iter}.pt

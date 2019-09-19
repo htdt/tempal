@@ -4,13 +4,8 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 16
+    size: 256
     history_size: 32
-    epochs: 10
-    batch_size: 512
-    n_step: 3
-    lr: 5e-4
-    pretrain: .15
 
 agent:
     pi_clip: .1

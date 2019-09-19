@@ -39,7 +39,7 @@ class Encoder(nn.Module):
     def __init__(self, emb_size, num_heads):
         super().__init__()
         self.emb_size = emb_size
-        
+
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
         self.base = nn.Sequential(
             init_ortho(nn.Conv2d(1, 32, 8, 4), 'relu'),

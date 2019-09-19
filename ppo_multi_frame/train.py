@@ -1,4 +1,4 @@
-import sys
+import argparse
 import torch
 from tqdm import trange
 
@@ -7,16 +7,18 @@ from common.make_env import make_vec_envs
 from common.cfg import load_cfg
 from common.logger import Logger
 from ppo.agent import Agent
-from frame_stack.model import ActorCritic
-from frame_stack.runner import EnvRunner
+from ppo_multi_frame.model import ActorCritic
+from ppo_multi_frame.runner import EnvRunner
+from ppo_multi_frame.eval import eval_model
 
 
-def train(cfg_name, resume):
+def train(cfg_name, env_name):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
-    envs = make_vec_envs(**cfg['env'])
+    env_name += 'NoFrameskip-v4'
+    envs = make_vec_envs(name=env_name, num=cfg['train']['num_env'])
 
     emb = cfg['embedding']
     model = ActorCritic(output_size=envs.action_space.n, device=device,
@@ -28,32 +30,36 @@ def train(cfg_name, resume):
         envs=envs,
         model=model,
         device=device,
-        emb_stack=emb['stack'],
+        emb_stack=emb['history_size'],
     )
 
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
     agent = Agent(model=model, optim=optim, **cfg['agent'])
 
     n_start = 0
-    cp_iter = cfg['train']['checkpoint_every']
     log_iter = cfg['train']['log_every']
     n_end = cfg['train']['steps']
-    cp_name = cfg['train']['checkpoint_name']
+
+    log.log.add_text('env', env_name)
 
     for n_iter, rollout in zip(trange(n_start, n_end), runner):
         progress = n_iter / n_end
         optim.update(progress)
         agent_log = agent.update(rollout, progress)
-
         if n_iter % log_iter == 0:
             log.output({**agent_log, **runner.get_logs()}, n_iter)
 
-        if n_iter > n_start and n_iter % cp_iter == 0:
-            f = cp_name.format(n_iter=n_iter//cp_iter)
-            torch.save(model.state_dict(), f)
+    reward = eval_model(model, envs, emb['history_size'], emb['size'], device)
+    reward_str = f'{reward.mean():.2f} ± {reward.std():.2f}'
+    log.log.add_text('final', reward_str)
+    log.log.close()
 
 
 if __name__ == '__main__':
-    assert len(sys.argv) in [2, 3], 'config name required'
-    resume = len(sys.argv) == 3 and sys.argv[2] == 'resume'
-    train(sys.argv[1], resume)
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--cfg', type=str, default='plain')
+    parser.add_argument('--env', type=str, default='MsPacman', choices=[
+                        'MsPacman', 'SpaceInvaders', 'Breakout', 'Gravitar',
+                        'QBert', 'Seaquest', 'Enduro', 'MontezumaRevenge'])
+    args = parser.parse_args()
+    train(args.cfg, args.env)
