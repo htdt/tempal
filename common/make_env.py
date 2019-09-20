@@ -16,7 +16,7 @@ def make_vec_envs(name, num, seed=0):
             is_atari = hasattr(gym.envs, 'atari') and isinstance(
                 env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
             if is_atari:
-                env = make_atari(name)
+                env = make_atari(name, max_episode_steps=10000)
 
             env.seed(seed + rank)
             env = bench.Monitor(env, None)

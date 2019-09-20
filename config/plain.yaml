@@ -8,7 +8,7 @@ embedding:
     history_size: 1
     hidden_size: 1
     epochs: 0
-    pretrain: 2
+    pretrain: 2 # = off embedding
 
 agent:
     pi_clip: .1

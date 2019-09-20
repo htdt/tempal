@@ -5,6 +5,7 @@ from tqdm import trange
 
 from common.optim import ParamOptim
 from common.make_env import make_vec_envs
+from common.make_obstacle_tower import make_obstacle_tower
 from common.cfg import load_cfg
 from common.logger import Logger
 from ppo.agent import Agent
@@ -19,8 +20,11 @@ def train(cfg_name, env_name):
     print(f'running on {device}')
     cfg = load_cfg(cfg_name)
     log = Logger(device=device)
-    env_name += 'NoFrameskip-v4'
-    envs = make_vec_envs(name=env_name, num=cfg['train']['num_env'])
+    if env_name == 'OT':
+        envs = make_obstacle_tower(cfg['train']['num_env'])
+    else:
+        envs = make_vec_envs(env_name + 'NoFrameskip-v4',
+                             cfg['train']['num_env'])
 
     emb = cfg['embedding']
     model = ActorCritic(
@@ -94,6 +98,6 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='plain')
     parser.add_argument('--env', type=str, default='MsPacman', choices=[
                         'MsPacman', 'SpaceInvaders', 'Breakout', 'Gravitar',
-                        'QBert', 'Seaquest', 'Enduro', 'MontezumaRevenge'])
+                        'Qbert', 'Seaquest', 'Enduro', 'OT'])
     args = parser.parse_args()
     train(args.cfg, args.env)
