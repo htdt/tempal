@@ -62,8 +62,6 @@ def train(cfg_name, env_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--cfg', type=str, default='plain')
-    parser.add_argument('--env', type=str, default='MsPacman', choices=[
-                        'MsPacman', 'SpaceInvaders', 'Breakout', 'Gravitar',
-                        'Qbert', 'Seaquest', 'Enduro', 'OT'])
+    parser.add_argument('--env', type=str, default='MsPacman')
     args = parser.parse_args()
     train(args.cfg, args.env)

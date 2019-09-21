@@ -6,8 +6,11 @@ from gym.spaces.discrete import Discrete
 from baselines import bench
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.atari_wrappers import FrameStack
-from obstacle_tower_env import ObstacleTowerEnv
 from common.make_env import VecPyTorch
+try:
+    from obstacle_tower_env import ObstacleTowerEnv
+except ModuleNotFoundError:
+    ObstacleTowerEnv = None
 
 import cv2
 cv2.ocl.setUseOpenCL(False)
@@ -39,12 +42,15 @@ class OTWrapper(gym.Wrapper):
         return obs
 
 
-def make_obstacle_tower(num, seed=0):
+def make_obstacle_tower(num, seed=0, show=False):
+    assert ObstacleTowerEnv is not None,\
+        'install https://github.com/Unity-Technologies/obstacle-tower-env'
+
     def make_env(rank):
         def _thunk():
             env = ObstacleTowerEnv('../ObstacleTower/obstacletower',
                                    retro=True, worker_id=rank,
-                                   realtime_mode=False,
+                                   realtime_mode=show,
                                    config={'total-floors': 20})
             env.seed(seed)
             env = bench.Monitor(env, None)

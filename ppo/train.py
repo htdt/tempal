@@ -15,15 +15,15 @@ from ppo.eval import eval_model
 from encoders.iic import IIC
 
 
-def train(cfg_name, env_name):
+def train(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'running on {device}')
-    cfg = load_cfg(cfg_name)
+    cfg = load_cfg(args.cfg)
     log = Logger(device=device)
-    if env_name == 'OT':
-        envs = make_obstacle_tower(cfg['train']['num_env'])
+    if args.env == 'OT':
+        envs = make_obstacle_tower(cfg['train']['num_env'], args.seed)
     else:
-        envs = make_vec_envs(env_name + 'NoFrameskip-v4',
+        envs = make_vec_envs(args.env + 'NoFrameskip-v4',
                              cfg['train']['num_env'])
 
     emb = cfg['embedding']
@@ -58,14 +58,17 @@ def train(cfg_name, env_name):
     optim = ParamOptim(**cfg['optimizer'], params=model.parameters())
     agent = Agent(model=model, optim=optim, **cfg['agent'])
 
-    n_start = 0
-    log_iter = cfg['train']['log_every']
-    n_end = cfg['train']['steps']
+    if args.load is not None:
+        dump = torch.load(args.load, map_location=device)
+        model.load_state_dict(dump[0])
+        emb_trainer.encoder.load_state_dict(dump[1])
+        emb_trainer.encoder.head_main = args.head
 
-    log.log.add_text('env', env_name)
+    log.log.add_text('env', args.env)
     log.log.add_text('hparams', str(emb))
 
-    for n_iter, rollout in zip(trange(n_start, n_end), runner):
+    n_end = cfg['train']['steps']
+    for n_iter, rollout in zip(trange(n_end), runner):
         progress = n_iter / n_end
 
         if progress >= emb['pretrain'] and\
@@ -78,13 +81,14 @@ def train(cfg_name, env_name):
         agent_log = agent.update(rollout, progress)
         emb_log = emb_trainer.update(rollout['obs'])
 
-        if (n_iter + 1) % log_iter == 0:
+        if n_iter % cfg['train']['log_every'] == 0:
             log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)
 
-    filename = f'models/{int(time.time())}.pt'
-    dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
-    torch.save(dump, filename)
-    log.log.add_text('filename', filename)
+    if n_end > 0:
+        filename = f'models/{int(time.time())}.pt'
+        dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
+        torch.save(dump, filename)
+        log.log.add_text('filename', filename)
 
     reward = eval_model(model, envs, emb_trainer.encoder,
                         emb['history_size'], emb['size'], device)
@@ -96,8 +100,9 @@ def train(cfg_name, env_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--cfg', type=str, default='plain')
-    parser.add_argument('--env', type=str, default='MsPacman', choices=[
-                        'MsPacman', 'SpaceInvaders', 'Breakout', 'Gravitar',
-                        'Qbert', 'Seaquest', 'Enduro', 'OT'])
+    parser.add_argument('--env', type=str, default='MsPacman')
+    parser.add_argument('--load', type=str)
+    parser.add_argument('--head', type=int, choices=[1, 2, 3, 4, 5])
+    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
-    train(args.cfg, args.env)
+    train(args)
