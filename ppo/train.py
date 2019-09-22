@@ -67,32 +67,34 @@ def train(args):
     log.log.add_text('env', args.env)
     log.log.add_text('hparams', str(emb))
 
-    n_end = cfg['train']['steps']
-    for n_iter, rollout in zip(trange(n_end), runner):
-        progress = n_iter / n_end
+    if not args.skip_train:
+        n_end = cfg['train']['steps']
+        for n_iter, rollout in zip(trange(n_end), runner):
+            progress = n_iter / n_end
 
-        if progress >= emb['pretrain'] and\
-                emb_trainer.encoder.head_main is None:
-            head_id = emb_trainer.select_head()
-            log.log.add_text('iic', f'head {head_id}', n_iter)
+            if progress >= emb['pretrain'] and\
+                    emb_trainer.encoder.head_main is None:
+                head_id = emb_trainer.select_head()
+                log.log.add_text('iic', f'head {head_id}', n_iter)
 
-        optim.update(progress)
-        emb_trainer.optim.update(progress)
-        agent_log = agent.update(rollout, progress)
-        emb_log = emb_trainer.update(rollout['obs'])
+            optim.update(progress)
+            emb_trainer.optim.update(progress)
+            agent_log = agent.update(rollout, progress)
+            emb_log = emb_trainer.update(rollout['obs'])
 
-        if n_iter % cfg['train']['log_every'] == 0:
-            log.output({**agent_log, **emb_log, **runner.get_logs()}, n_iter)
+            if n_iter % cfg['train']['log_every'] == 0:
+                log.output({**agent_log, **emb_log, **runner.get_logs()},
+                           n_iter)
 
-    if n_end > 0:
         filename = f'models/{int(time.time())}.pt'
         dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
         torch.save(dump, filename)
         log.log.add_text('filename', filename)
 
     reward = eval_model(model, envs, emb_trainer.encoder,
-                        emb['history_size'], emb['size'], device)
-    reward_str = f'{reward.mean():.2f} ± {reward.std():.2f}'
+                        emb['history_size'], emb['size'], device,
+                        args.eval_ep)
+    reward_str = f'{reward.mean():.2f} {reward.std():.2f}'
     log.log.add_text('final', reward_str)
     log.log.close()
 
@@ -101,8 +103,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--cfg', type=str, default='plain')
     parser.add_argument('--env', type=str, default='MsPacman')
+
     parser.add_argument('--load', type=str)
     parser.add_argument('--head', type=int, choices=[1, 2, 3, 4, 5])
     parser.add_argument('--seed', type=int, default=0)
-    args = parser.parse_args()
-    train(args)
+    parser.add_argument('--skip-train', action='store_true', default=False)
+    parser.add_argument('--eval-ep', type=int, default=100)
+
+    train(parser.parse_args())
