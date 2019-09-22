@@ -52,7 +52,7 @@ def make_obstacle_tower(num, seed=0, show=False):
                                    retro=True, worker_id=rank,
                                    realtime_mode=show,
                                    config={'total-floors': 20})
-            env.seed(seed + rank)
+            env.seed(seed + rank % 8)
             env = bench.Monitor(env, None, allow_early_resets=True)
             env = OTWrapper(env)
             env = FrameStack(env, 4)

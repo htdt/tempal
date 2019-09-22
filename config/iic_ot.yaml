@@ -22,7 +22,7 @@ agent:
     gae_lambda: .95
 
 train:
-    steps: 9766 # 10M / (128 * 8)
+    steps: 14648  # 15M / (128 * 8)
     rollout_size: 128
     num_env: 16
     log_every: 1
