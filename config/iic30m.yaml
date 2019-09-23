@@ -1,0 +1,28 @@
+optimizer:
+    lr: 2.5e-4
+    eps: 1e-5
+    clip_grad: .5
+
+embedding:
+    size: 16
+    history_size: 32
+    epochs: 10
+    batch_size: 512
+    n_step: 3
+    lr: 5e-4
+    pretrain: .15
+
+agent:
+    pi_clip: .1
+    gamma: .99
+    epochs: 3
+    batch_size: 256
+    ent_k: .01
+    val_loss_k: 1
+    gae_lambda: .95
+
+train:
+    steps: 29297
+    rollout_size: 128
+    num_env: 8
+    log_every: 1
