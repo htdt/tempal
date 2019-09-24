@@ -1,17 +1,12 @@
-## Proximal Policy Optimization
-- Python 3.7, PyTorch 1.2
-- Neat, simple and efficient code
-- `atari pacman` score ≈4200 after 24h training on T4 GPU 
+## Event Discovery for History Representation in Reinforcement Learning
+Anonymized code for reproducibility for ICLR 2020
 
 ## Start
 ```
-pip install -r requirements.txt
-tensorboard --logdir runs
-python -m train cartpole
+python -m ppo.train --cfg iic --env MsPacman
 ```
 
 ## Dependencies
-```
-git clone https://github.com/openai/baselines.git
-pip install -e baselines
-```
+- Python 3.7
+- https://github.com/openai/baselines
+- https://github.com/Unity-Technologies/obstacle-tower-env (optionally)

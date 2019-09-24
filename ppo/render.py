@@ -49,10 +49,12 @@ def render(args):
             obs_emb[0, -1] = encoder(obs[:, -1:])
         c = obs_emb[0, -1].argmax().item()
         clusters.append(c)
+        print(c)
 
-        env.render()
+        if args.env != 'OT':
+            env.render()
         time.sleep(1/30)
-    print(clusters)
+    # print(clusters)
 
 
 if __name__ == '__main__':

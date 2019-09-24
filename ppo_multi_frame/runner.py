@@ -37,6 +37,7 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
+        # tremendously memory inefficient, only for POC purposes
         obs_emb = torch.zeros(
             r + 1, n, self.emb_stack, 1, 84, 84,
             device=self.device, dtype=torch.uint8)
