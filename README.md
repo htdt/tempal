@@ -8,5 +8,6 @@ python -m ppo.train --cfg iic --env MsPacman
 
 ## Dependencies
 - Python 3.7
+- requirements.txt
 - https://github.com/openai/baselines
 - https://github.com/Unity-Technologies/obstacle-tower-env (optionally)
