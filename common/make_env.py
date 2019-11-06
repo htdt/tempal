@@ -1,3 +1,5 @@
+import numpy as np
+import random
 import torch
 import gym
 from gym.spaces.box import Box
@@ -24,6 +26,11 @@ def make_vec_envs(name, num, seed=0):
                 env = wrap_deepmind(env, frame_stack=True)
             return env
         return _thunk
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
     envs = [make_env(i) for i in range(num)]
     envs = DummyVecEnv(envs) if num == 1 else ShmemVecEnv(envs, context='fork')

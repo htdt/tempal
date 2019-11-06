@@ -1,3 +1,5 @@
+import random
+import torch
 import numpy as np
 import gym
 from gym.spaces.box import Box
@@ -58,6 +60,12 @@ def make_obstacle_tower(num, seed=0, show=False):
             env = FrameStack(env, 4)
             return env
         return _thunk
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
     envs = [make_env(i) for i in range(num)]
     envs = SubprocVecEnv(envs, context='fork')
     envs = VecPyTorch(envs)
