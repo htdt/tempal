@@ -47,7 +47,7 @@ class ActorCritic(nn.Module):
         if mode == 'rnn':
             fc_size = conv_output + emb_size * 2
         elif mode == 'concat':
-            fc_size = emb_size * history_size
+            fc_size = conv_output + emb_size * history_size
         elif mode == 'no_i':
             fc_size = emb_size * 2
 
@@ -72,5 +72,7 @@ class ActorCritic(nn.Module):
             x = x.float() / 255.
             x = self.conv1(x)
             x = torch.cat([x, x_emb], -1)
+        else:
+            x = x_emb
         x = self.fc(x)
         return Categorical(logits=self.pi(x)), self.val(x)
