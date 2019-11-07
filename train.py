@@ -31,7 +31,7 @@ def train(args):
                              cfg['train']['num_env'], args.seed)
 
     emb = cfg['embedding']
-    if not args.rnn:
+    if args.mf is None:
         model = ActorCritic(
             output_size=envs.action_space.n,
             device=device,
@@ -63,7 +63,9 @@ def train(args):
         model = ActorCriticMF(
             output_size=envs.action_space.n,
             device=device,
-            emb_size=emb['size']
+            emb_size=emb['size'],
+            history_size=emb['history_size'],
+            mode=args.mf,
         )
         model.train().to(device=device)
 
@@ -81,11 +83,11 @@ def train(args):
     if args.load is not None:
         dump = torch.load(args.load, map_location=device)
         model.load_state_dict(dump[0])
-        if not args.rnn:
+        if args.mf is None:
             emb_trainer.encoder.load_state_dict(dump[1])
             emb_trainer.encoder.head_main = args.head
 
-    log.log.add_text('env', args.env)
+    log.log.add_text('env', f'{args.env} {args.seed}')
     log.log.add_text('hparams', str(emb))
 
     if not args.skip_train:
@@ -93,14 +95,14 @@ def train(args):
         for n_iter, rollout in zip(trange(n_end), runner):
             progress = n_iter / n_end
 
-            if not args.rnn and progress >= emb['pretrain'] and\
+            if args.mf is None and progress >= emb['pretrain'] and\
                     emb_trainer.encoder.head_main is None:
                 head_id = emb_trainer.select_head()
                 log.log.add_text('iic', f'head {head_id}', n_iter)
 
             optim.update(progress)
             agent_log = agent.update(rollout, progress)
-            if not args.rnn:
+            if args.mf is None:
                 emb_trainer.optim.update(progress)
                 emb_log = emb_trainer.update(rollout['obs'])
             else:
@@ -112,12 +114,12 @@ def train(args):
 
         filename = f'models/{int(time.time())}.pt'
         dump = [model.state_dict()]
-        if not args.rnn:
+        if args.mf is None:
             dump += [emb_trainer.encoder.state_dict()]
         torch.save(dump, filename)
         log.log.add_text('filename', filename)
 
-    if not args.rnn:
+    if args.mf is None:
         reward = eval_model(model, envs, emb_trainer.encoder,
                             emb['history_size'], emb['size'], device,
                             args.eval_ep)
@@ -140,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--skip-train', action='store_true', default=False)
     parser.add_argument('--eval-ep', type=int, default=100)
-    parser.add_argument('--rnn', action='store_true', default=False)
+    parser.add_argument('--mf', type=str, default=None,
+                        choices=['rnn', 'concat', 'no_i'])
 
     train(parser.parse_args())
