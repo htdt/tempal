@@ -1,7 +1,7 @@
 import torch
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
 from ppo.model import ActorCritic
-from encoders.iic import Encoder
+from iic import Encoder
 
 
 def eval_model(

@@ -5,3 +5,5 @@ runs
 .env
 .DS_Store
 UnitySDK.log
+wandb/
+**/wandb/**

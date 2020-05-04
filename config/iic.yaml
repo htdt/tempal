@@ -5,12 +5,12 @@ optimizer:
 
 embedding:
     size: 16
+    size_aux: 32
     history_size: 32
-    epochs: 10
+    epochs: 1
     batch_size: 512
     n_step: 3
     lr: 5e-4
-    pretrain: .15
 
 agent:
     pi_clip: .1

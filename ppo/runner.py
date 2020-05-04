@@ -3,7 +3,6 @@ import torch
 import numpy as np
 from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
 from ppo.model import ActorCritic
-from encoders.base import BaseEncoder
 
 
 @dataclass
@@ -13,7 +12,7 @@ class EnvRunner:
     rollout_size: int
     device: str
 
-    encoder: BaseEncoder
+    encoder: torch.nn.Module
     emb_size: int
     history_size: int
 
@@ -52,8 +51,10 @@ class EnvRunner:
 
         step = 0
         obs[0] = self.envs.reset()
+        self.encoder.eval()
         with torch.no_grad():
             obs_emb[0, :, -1] = self.encoder(obs[0, :, -1:])
+        self.encoder.train()
 
         while True:
             with torch.no_grad():
@@ -68,8 +69,11 @@ class EnvRunner:
 
             obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
             obs_emb[step + 1] *= masks[step, ..., None]
+
+            self.encoder.eval()
             with torch.no_grad():
                 obs_emb[step + 1, :, -1] = self.encoder(obs[step + 1, :, -1:])
+            self.encoder.train()
 
             for info in infos:
                 if 'episode' in info.keys():
