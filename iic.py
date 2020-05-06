@@ -14,10 +14,11 @@ from common.tools import init_ortho
 class IIC:
     emb_size: int
     emb_size_aux: int
-    n_step: int
+    temporal_shift: int
+    spatial_shift: int
     batch_size: int
     lr: float
-    aug: bool = True
+    lamb: float
 
     def __post_init__(self):
         self.encoder = Encoder(self.emb_size, self.emb_size_aux, True)
@@ -26,25 +27,30 @@ class IIC:
         self.target_nce = torch.arange(self.batch_size).cuda()
 
     def update(self, obs, need_stat):
-        def shift(x):
-            return x + random.randrange(1, self.n_step + 1)
+        def temporal(x):
+            return x + random.randrange(1, self.temporal_shift + 1)
 
-        idx0 = random.choices(range(obs.shape[0] - self.n_step), k=self.batch_size)
-        idx0_shift = list(map(shift, idx0))
+        def spatial():
+            return random.randrange(-self.spatial_shift, self.spatial_shift + 1)
+
+        idx0 = random.choices(
+            range(obs.shape[0] - self.temporal_shift), k=self.batch_size
+        )
+        idx0_shift = list(map(temporal, idx0))
         idx1 = random.choices(range(obs.shape[1]), k=self.batch_size)
         idx2 = random.choices(range(obs.shape[2]), k=self.batch_size)
 
         x0, x1 = obs[idx0, idx1, idx2], obs[idx0_shift, idx1, idx2]
-        if self.aug:
+        if self.spatial_shift > 0:
             for n in range(self.batch_size):
                 for x in [x0, x1]:
-                    shifts = random.randrange(-9, 10), random.randrange(-9, 10)
+                    shifts = spatial(), spatial()
                     x[n] = torch.roll(x[n], shifts=shifts, dims=(-2, -1))
 
         x0h0, x0h1 = self.encoder(x0, True)
         x1h0, x1h1 = self.encoder(x1, True)
 
-        loss_iic = IID_loss(x0h0, x1h0, lamb=1.1)
+        loss_iic = IID_loss(x0h0, x1h0, self.lamb)
 
         x0h1, x1h1 = normalize(x0h1, p=2, dim=1), normalize(x1h1, p=2, dim=1)
         logits = [x0h1 @ x1h1.t(), x0h1 @ x0h1.t(), x1h1 @ x1h1.t()]

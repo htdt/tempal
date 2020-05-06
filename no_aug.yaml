@@ -4,15 +4,15 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 32
+    size: 16
     size_aux: 32
     history_size: 32
     epochs: 2
     batch_size: 2048
+    n_step: 4
     lr: 5e-4
     # hidden_size: 256
-    temporal_shift: 4
-    spatial_shift: 4
+    aug: False
     lamb: 1.1
     pretrain: 5000
 

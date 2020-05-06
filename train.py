@@ -38,9 +38,11 @@ def train(args):
     emb_trainer = IIC(
         emb_size=emb["size"],
         emb_size_aux=emb["size_aux"],
-        n_step=emb["n_step"],
+        spatial_shift=emb["spatial_shift"],
+        temporal_shift=emb["temporal_shift"],
         batch_size=emb["batch_size"],
         lr=emb["lr"],
+        lamb=emb["lamb"],
     )
 
     optim = ParamOptim(**cfg["optimizer"], params=model.parameters())
@@ -57,12 +59,13 @@ def train(args):
     iic_buf, last_rand = random_rollout(1e5, rollout_size + 1, envs, 'cuda')
     iic_cursor = 0
 
-    for epoch in trange(1000):
-        log = emb_trainer.update(iic_buf, epoch % 10 == 0)
-        wandb.log(log)
+    for epoch in trange(emb["pretrain"]):
+        need_stat = (epoch + 1) % (emb["pretrain"] // 100) == 0
+        log = emb_trainer.update(iic_buf, need_stat)
+        if need_stat:
+            wandb.log(log)
 
     runner = EnvRunner(
-        start_from=last_rand,
         rollout_size=rollout_size,
         envs=envs,
         model=model,
@@ -85,7 +88,7 @@ def train(args):
             iic_buf[:, iic_cursor] = rollout["obs"][:, :, -1:]
             iic_cursor = (iic_cursor + 1) % iic_buf.shape[1]
             for epoch in range(emb["epochs"]):
-                emb_log = emb_trainer.update(iic_buf, need_stat and epoch == 0)
+                emb_log = emb_trainer.update(iic_buf, need_stat and (epoch == 0))
 
             if need_stat:
                 wandb.log(
@@ -95,7 +98,7 @@ def train(args):
         filename = f"models/{int(time.time())}.pt"
         dump = [model.state_dict(), emb_trainer.encoder.state_dict()]
         torch.save(dump, filename)
-        wandb.log({"filename", filename})
+        wandb.log({"filename": filename})
 
     reward = eval_model(
         model,

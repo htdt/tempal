@@ -9,10 +9,10 @@ embedding:
     history_size: 32
     epochs: 2
     batch_size: 2048
+    n_step: 4
     lr: 5e-4
-    # hidden_size: 256
-    temporal_shift: 4
-    spatial_shift: 4
+    hidden_size: 256
+    aug: True
     lamb: 1.1
     pretrain: 5000
 
