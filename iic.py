@@ -1,12 +1,11 @@
 import random
 import sys
 from dataclasses import dataclass
-import numpy as np
 import torch
 from torch import nn
 from torch.nn.functional import cross_entropy, normalize
+from torch.distributions import Categorical
 from torchvision.models import resnet18
-
 from common.optim import ParamOptim
 from common.tools import init_ortho
 
@@ -18,83 +17,88 @@ class IIC:
     n_step: int
     batch_size: int
     lr: float
-    epochs: int
-    device: str = "cuda"
-    rolls: bool = False
+    aug: bool = True
 
     def __post_init__(self):
-        self.encoder = Encoder(self.emb_size, self.emb_size_aux).to(self.device)
-        self.encoder.train()
+        self.encoder = Encoder(self.emb_size, self.emb_size_aux, True)
+        self.encoder = self.encoder.train().cuda()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
         self.target_nce = torch.arange(self.batch_size).cuda()
 
-    def update(self, obs):
-        obs = obs[:, :, -1:]  # last frame out of 4
-        num_step = self.epochs * obs.shape[0] * obs.shape[1]
-
+    def update(self, obs, need_stat):
         def shift(x):
             return x + random.randrange(1, self.n_step + 1)
 
-        idx0 = random.choices(range(obs.shape[0] - self.n_step), k=num_step)
-        idx1 = list(map(shift, idx0))
-        idx_env = random.choices(range(obs.shape[1]), k=num_step)
+        idx0 = random.choices(range(obs.shape[0] - self.n_step), k=self.batch_size)
+        idx0_shift = list(map(shift, idx0))
+        idx1 = random.choices(range(obs.shape[1]), k=self.batch_size)
+        idx2 = random.choices(range(obs.shape[2]), k=self.batch_size)
 
-        losses_iic, losses_nce, nce_acc, clusters = [], [], [], []
-        for i in range(num_step // self.batch_size):
-            s = slice(i * self.batch_size, (i + 1) * self.batch_size)
-            x0 = obs[idx0[s], idx_env[s]]
-            x1 = obs[idx1[s], idx_env[s]]
+        x0, x1 = obs[idx0, idx1, idx2], obs[idx0_shift, idx1, idx2]
+        if self.aug:
+            for n in range(self.batch_size):
+                for x in [x0, x1]:
+                    shifts = random.randrange(-9, 10), random.randrange(-9, 10)
+                    x[n] = torch.roll(x[n], shifts=shifts, dims=(-2, -1))
 
-            x0h0, x0h1 = self.encoder(x0, True)
-            x1h0, x1h1 = self.encoder(x1, True)
-            loss_iic = IID_loss(x0h0, x1h0)
+        x0h0, x0h1 = self.encoder(x0, True)
+        x1h0, x1h1 = self.encoder(x1, True)
 
-            x0h1, x1h1 = normalize(x0h1, p=2, dim=1), normalize(x1h1, p=2, dim=1)
-            logits = [x0h1 @ x1h1.t(), x0h1 @ x0h1.t(), x1h1 @ x1h1.t()]
-            logits = torch.cat(logits, dim=1)
-            loss_nce = cross_entropy(logits, self.target_nce)
+        loss_iic = IID_loss(x0h0, x1h0, lamb=1.1)
 
-            self.optim.step(loss_iic + loss_nce)
-            losses_iic.append(loss_iic.item())
-            losses_nce.append(loss_nce.item())
-            nce_acc.append(
-                (logits[:, : self.batch_size].argmax(-1) == self.target_nce)
-                .float()
-                .mean()
-                .item()
-            )
-            clusters.append(len(x0h0.argmax(-1).unique()))
+        x0h1, x1h1 = normalize(x0h1, p=2, dim=1), normalize(x1h1, p=2, dim=1)
+        logits = [x0h1 @ x1h1.t(), x0h1 @ x0h1.t(), x1h1 @ x1h1.t()]
+        logits = torch.cat(logits, dim=1)
+        loss_nce = cross_entropy(logits, self.target_nce)
 
+        self.optim.step(loss_iic + loss_nce)
+
+        if not need_stat:
+            return {}
+
+        clusters = x0h0.detach().argmax(-1).unique(return_counts=True)
+        ent = Categorical(probs=clusters[1].float()).entropy()
+        nce_acc = (
+            (logits[:, : self.batch_size].argmax(-1) == self.target_nce)
+            .float()
+            .mean()
+            .item()
+        )
+        iic_acc = (x0h0.argmax(-1) == x1h0.argmax(-1)).float().mean().item()
         return {
-            "loss/iic": np.mean(losses_iic),
-            "loss/nce": np.mean(losses_nce),
-            "nce_acc": np.mean(nce_acc),
-            "clusters": np.mean(clusters),
+            "loss_iic": loss_iic.item(),
+            "loss_nce": loss_nce.item(),
+            "clusters": len(clusters[0]),
+            "ent_iic": ent.item(),
+            "nce_acc": nce_acc,
+            "iic_acc": iic_acc,
         }
 
 
 class Encoder(nn.Module):
-    def __init__(self, size, size_aux):
+    def __init__(self, size, size_aux, mini=False):
         super().__init__()
 
-        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
-        # self.base = nn.Sequential(
-        #     init_ortho(nn.Conv2d(1, 32, 8, 4), "relu"),
-        #     nn.ReLU(),
-        #     init_ortho(nn.Conv2d(32, 64, 4, 2), "relu"),
-        #     nn.ReLU(),
-        #     init_ortho(nn.Conv2d(64, 64, 3, 1), "relu"),
-        #     nn.ReLU(),
-        #     nn.Flatten(),
-        # )
-        # size_out = 64 * 7 * 7
-        self.base = resnet18()
-        self.base.fc = nn.Identity()
-        self.base.conv1 = nn.Conv2d(1, 64, 3, 1, 1, bias=False)
-        size_out = 512
+        if mini:
+            # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
+            self.base = nn.Sequential(
+                init_ortho(nn.Conv2d(1, 32, 8, 4), "relu"),
+                nn.ReLU(),
+                init_ortho(nn.Conv2d(32, 64, 4, 2), "relu"),
+                nn.ReLU(),
+                init_ortho(nn.Conv2d(64, 64, 3, 1), "relu"),
+                nn.ReLU(),
+                nn.Flatten(),
+                init_ortho(nn.Linear(64 * 7 * 7, 512), "relu"),
+                nn.ReLU(),
+            )
+        else:
+            self.base = resnet18()
+            self.base.fc = nn.Identity()
+            self.base.conv1 = nn.Conv2d(1, 64, 3, 1, 1, bias=False)
 
-        self.head = nn.Sequential(nn.Linear(size_out, size), nn.Softmax(-1))
-        self.head_aux = nn.Linear(size_out, size_aux)
+        self.head = nn.Sequential(nn.Linear(512, size), nn.Softmax(-1))
+        self.head_aux = nn.Linear(512, size_aux)
 
     def forward(self, x, aux=False):
         x = self.base(x.float() / 255)

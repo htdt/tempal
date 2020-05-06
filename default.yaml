@@ -4,11 +4,14 @@ optimizer:
     clip_grad: .5
 
 embedding:
-    size: 1
-    history_size: 1
-    hidden_size: 1
-    epochs: 0
-    pretrain: 2 # = off embedding
+    size: 16
+    size_aux: 32
+    history_size: 32
+    epochs: 2
+    batch_size: 2048
+    n_step: 4
+    lr: 5e-4
+    # hidden_size: 256
 
 agent:
     pi_clip: .1
@@ -23,4 +26,4 @@ train:
     steps: 9766 # 10M / (128 * 8)
     rollout_size: 128
     num_env: 8
-    log_every: 1
+    log_every: 10

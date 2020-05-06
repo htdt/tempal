@@ -12,6 +12,7 @@ from ppo.agent import Agent
 from ppo.model import ActorCritic
 from ppo.runner import EnvRunner
 from ppo.eval import eval_model
+from ppo.runner_rand import random_rollout
 from iic import IIC
 
 
@@ -37,21 +38,9 @@ def train(args):
     emb_trainer = IIC(
         emb_size=emb["size"],
         emb_size_aux=emb["size_aux"],
-        epochs=emb.get("epochs", 1),
-        n_step=emb.get("n_step", 1),
-        batch_size=emb.get("batch_size", 256),
-        lr=emb.get("lr", 1e-4),
-        device="cuda",
-    )
-
-    runner = EnvRunner(
-        rollout_size=cfg["train"]["rollout_size"],
-        envs=envs,
-        model=model,
-        encoder=emb_trainer.encoder,
-        emb_size=emb["size"],
-        history_size=emb["history_size"],
-        device="cuda",
+        n_step=emb["n_step"],
+        batch_size=emb["batch_size"],
+        lr=emb["lr"],
     )
 
     optim = ParamOptim(**cfg["optimizer"], params=model.parameters())
@@ -64,17 +53,41 @@ def train(args):
 
     wandb.init(project="edhr", config={**cfg, **vars(args)})
 
+    rollout_size = cfg["train"]["rollout_size"]
+    iic_buf, last_rand = random_rollout(1e5, rollout_size + 1, envs, 'cuda')
+    iic_cursor = 0
+
+    for epoch in trange(1000):
+        log = emb_trainer.update(iic_buf, epoch % 10 == 0)
+        wandb.log(log)
+
+    runner = EnvRunner(
+        start_from=last_rand,
+        rollout_size=rollout_size,
+        envs=envs,
+        model=model,
+        encoder=emb_trainer.encoder,
+        emb_size=emb["size"],
+        history_size=emb["history_size"],
+        device="cuda",
+    )
+
     if not args.skip_train:
         n_end = cfg["train"]["steps"]
         for n_iter, rollout in zip(trange(n_end), runner):
             progress = n_iter / n_end
+            need_stat = n_iter % cfg["train"]["log_every"] == 0
 
             optim.update(progress)
             emb_trainer.optim.update(progress)
             agent_log = agent.update(rollout, progress)
-            emb_log = emb_trainer.update(rollout["obs"])
 
-            if n_iter % cfg["train"]["log_every"] == 0:
+            iic_buf[:, iic_cursor] = rollout["obs"][:, :, -1:]
+            iic_cursor = (iic_cursor + 1) % iic_buf.shape[1]
+            for epoch in range(emb["epochs"]):
+                emb_log = emb_trainer.update(iic_buf, need_stat and epoch == 0)
+
+            if need_stat:
                 wandb.log(
                     {**agent_log, **emb_log, **runner.get_logs(), "n_iter": n_iter}
                 )
@@ -98,7 +111,7 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument("--cfg", type=str, default="iic")
+    parser.add_argument("--cfg", type=str, default="default")
     parser.add_argument("--env", type=str, default="MsPacman")
     parser.add_argument("--load", type=str)
     parser.add_argument("--seed", type=int, default=0)

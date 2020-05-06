@@ -15,6 +15,7 @@ class EnvRunner:
     encoder: torch.nn.Module
     emb_size: int
     history_size: int
+    start_from: torch.Tensor = None
 
     ep_reward = []
     ep_len = []
@@ -49,12 +50,10 @@ class EnvRunner:
         actions = tensor(dtype=torch.long)
         masks = tensor()
 
+        obs[0] = self.start_from if self.start_from is not None else self.envs.reset()
         step = 0
-        obs[0] = self.envs.reset()
-        self.encoder.eval()
         with torch.no_grad():
             obs_emb[0, :, -1] = self.encoder(obs[0, :, -1:])
-        self.encoder.train()
 
         while True:
             with torch.no_grad():
@@ -70,10 +69,8 @@ class EnvRunner:
             obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
             obs_emb[step + 1] *= masks[step, ..., None]
 
-            self.encoder.eval()
             with torch.no_grad():
                 obs_emb[step + 1, :, -1] = self.encoder(obs[step + 1, :, -1:])
-            self.encoder.train()
 
             for info in infos:
                 if 'episode' in info.keys():
