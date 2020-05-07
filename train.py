@@ -60,9 +60,8 @@ def train(args):
     iic_cursor = 0
 
     for epoch in trange(emb["pretrain"]):
-        need_stat = (epoch + 1) % (emb["pretrain"] // 100) == 0
-        log = emb_trainer.update(iic_buf, need_stat)
-        if need_stat:
+        log = emb_trainer.update(iic_buf)
+        if (epoch + 1) % (emb["pretrain"] // 100) == 0:
             wandb.log(log)
 
     runner = EnvRunner(
@@ -79,8 +78,6 @@ def train(args):
         n_end = cfg["train"]["steps"]
         for n_iter, rollout in zip(trange(n_end), runner):
             progress = n_iter / n_end
-            need_stat = n_iter % cfg["train"]["log_every"] == 0
-
             optim.update(progress)
             emb_trainer.optim.update(progress)
             agent_log = agent.update(rollout, progress)
@@ -88,9 +85,9 @@ def train(args):
             iic_buf[:, iic_cursor] = rollout["obs"][:, :, -1:]
             iic_cursor = (iic_cursor + 1) % iic_buf.shape[1]
             for epoch in range(emb["epochs"]):
-                emb_log = emb_trainer.update(iic_buf, need_stat and (epoch == 0))
+                emb_log = emb_trainer.update(iic_buf)
 
-            if need_stat:
+            if (n_iter + 1) % cfg["train"]["log_every"] == 0:
                 wandb.log(
                     {**agent_log, **emb_log, **runner.get_logs(), "n_iter": n_iter}
                 )

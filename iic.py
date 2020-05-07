@@ -26,7 +26,7 @@ class IIC:
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
         self.target_nce = torch.arange(self.batch_size).cuda()
 
-    def update(self, obs, need_stat):
+    def update(self, obs):
         def temporal(x):
             return x + random.randrange(1, self.temporal_shift + 1)
 
@@ -58,9 +58,6 @@ class IIC:
         loss_nce = cross_entropy(logits, self.target_nce)
 
         self.optim.step(loss_iic + loss_nce)
-
-        if not need_stat:
-            return {}
 
         clusters = x0h0.detach().argmax(-1).unique(return_counts=True)
         ent = Categorical(probs=clusters[1].float()).entropy()

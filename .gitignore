@@ -8,3 +8,4 @@ UnitySDK.log
 wandb/
 **/wandb/**
 docker/env.list
+.vim
