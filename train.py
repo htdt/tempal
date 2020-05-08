@@ -56,10 +56,12 @@ def train(args):
     wandb.init(project="edhr", config={**cfg, **vars(args)})
 
     rollout_size = cfg["train"]["rollout_size"]
-    iic_buf, last_rand = random_rollout(1e5, rollout_size + 1, envs, 'cuda')
+    iic_buf, last_rand = random_rollout(
+        emb["pretrain_steps"], rollout_size + 1, envs, "cuda"
+    )
     iic_cursor = 0
 
-    for epoch in trange(emb["pretrain"]):
+    for epoch in trange(emb["pretrain_epochs"]):
         log = emb_trainer.update(iic_buf)
         if (epoch + 1) % (emb["pretrain"] // 100) == 0:
             wandb.log(log)
@@ -75,7 +77,10 @@ def train(args):
     )
 
     if not args.skip_train:
-        n_end = cfg["train"]["steps"]
+        n_end = int(
+            (cfg["train"]["total_steps"] - emb["pretrain_steps"])
+            / (envs.num_envs * rollout_size)
+        )
         for n_iter, rollout in zip(trange(n_end), runner):
             progress = n_iter / n_end
             optim.update(progress)

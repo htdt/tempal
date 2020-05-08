@@ -21,7 +21,7 @@ class IIC:
     lamb: float
 
     def __post_init__(self):
-        self.encoder = Encoder(self.emb_size, self.emb_size_aux, True)
+        self.encoder = Encoder(self.emb_size, self.emb_size_aux)
         self.encoder = self.encoder.train().cuda()
         self.optim = ParamOptim(lr=self.lr, params=self.encoder.parameters())
         self.target_nce = torch.arange(self.batch_size).cuda()
@@ -79,7 +79,7 @@ class IIC:
 
 
 class Encoder(nn.Module):
-    def __init__(self, size, size_aux, mini=False):
+    def __init__(self, size, size_aux, mini=True):
         super().__init__()
 
         if mini:

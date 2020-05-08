@@ -10,11 +10,11 @@ embedding:
     epochs: 2
     batch_size: 2048
     lr: 5e-4
-    # hidden_size: 256
     temporal_shift: 4
     spatial_shift: 4
     lamb: 1.1
-    pretrain: 5000
+    pretrain_steps: 1e5
+    pretrain_epochs: 5000
 
 agent:
     pi_clip: .1
@@ -26,7 +26,7 @@ agent:
     gae_lambda: .95
 
 train:
-    steps: 9766 # 10M / (128 * 8)
+    total_steps: 1e7
     rollout_size: 128
     num_env: 8
     log_every: 10
