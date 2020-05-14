@@ -7,8 +7,7 @@ from gym.spaces.discrete import Discrete
 
 from baselines import bench
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.atari_wrappers import FrameStack
-from common.make_env import VecPyTorch
+from common.make_env import VecPyTorch, FrameStack
 try:
     from obstacle_tower_env import ObstacleTowerEnv
 except ModuleNotFoundError:
@@ -57,7 +56,6 @@ def make_obstacle_tower(num, seed=0, show=False):
             env.seed(seed + rank % 8)
             env = bench.Monitor(env, None, allow_early_resets=True)
             env = OTWrapper(env)
-            env = FrameStack(env, 4)
             return env
         return _thunk
 
@@ -68,5 +66,5 @@ def make_obstacle_tower(num, seed=0, show=False):
 
     envs = [make_env(i) for i in range(num)]
     envs = SubprocVecEnv(envs, context='fork')
-    envs = VecPyTorch(envs)
+    envs = FrameStack(VecPyTorch(envs))
     return envs

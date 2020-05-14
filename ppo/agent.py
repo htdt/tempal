@@ -1,10 +1,10 @@
 from collections import defaultdict
 from dataclasses import dataclass
 import random
+import numpy as np
 import torch
 
 from common.optim import ParamOptim
-from common.tools import log_grads
 from ppo.model import ActorCritic
 
 
@@ -21,8 +21,8 @@ class Agent:
     gae_lambda: float
 
     def _gae(self, rollout, last_val):
-        m = rollout['masks'] * self.gamma
-        r, v = rollout['rewards'], rollout['vals']
+        m = rollout["masks"] * self.gamma
+        r, v = rollout["rewards"], rollout["vals"]
         adv = torch.empty_like(v)
         n_steps = adv.shape[0]
         gae = 0
@@ -37,13 +37,12 @@ class Agent:
 
     def update(self, rollout, progress=0):
         clip = self.pi_clip * (1 - progress)
-        num_step, num_env = rollout['log_probs'].shape[:2]
+        num_step, num_env = rollout["log_probs"].shape[:2]
         with torch.no_grad():
-            next_val = self.model(rollout['obs'][-1],
-                rollout['obs_emb'][-1])[1]
+            next_val = self.model(rollout["obs"][-1], rollout["obs_emb"][-1])[1]
         adv, returns = self._gae(rollout, next_val)
 
-        logs, grads = defaultdict(list), defaultdict(list)
+        logs = defaultdict(list)
 
         num_samples = self.epochs * num_step * num_env
         idx1 = random.choices(range(num_step), k=num_samples)
@@ -53,38 +52,23 @@ class Agent:
             s = slice(n_iter * self.batch_size, (n_iter + 1) * self.batch_size)
             idx = idx1[s], idx2[s]
 
-            dist, vals = self.model(
-                rollout['obs'][idx], rollout['obs_emb'][idx])
-            act = rollout['actions'][idx].squeeze(-1)
+            dist, vals = self.model(rollout["obs"][idx], rollout["obs_emb"][idx])
+            act = rollout["actions"][idx].squeeze(-1)
             log_probs = dist.log_prob(act).unsqueeze(-1)
             ent = dist.entropy().mean()
 
-            old_lp = rollout['log_probs'][idx]
+            old_lp = rollout["log_probs"][idx]
             ratio = torch.exp(log_probs - old_lp)
             surr1 = adv[idx] * ratio
             surr2 = adv[idx] * torch.clamp(ratio, 1 - clip, 1 + clip)
             act_loss = -torch.min(surr1, surr2).mean()
-            val_loss = .5 * (vals - returns[idx]).pow(2).mean()
+            val_loss = 0.5 * (vals - returns[idx]).pow(2).mean()
 
-            self.optim.step(-self.ent_k * ent + act_loss +
-                            self.val_loss_k * val_loss)
+            self.optim.step(-self.ent_k * ent + act_loss + self.val_loss_k * val_loss)
 
-            log_grads(self.model, grads)
-            logs['ent'].append(ent)
-            logs['clipfrac'].append(
-                (torch.abs(ratio - 1) > clip).float().mean())
-            logs['loss/actor'].append(act_loss)
-            logs['loss/critic'].append(val_loss)
+            logs["ent"].append(ent.item())
+            logs["clipfrac"].append((torch.abs(ratio - 1) > clip).float().mean().item())
+            logs["loss/actor"].append(act_loss.item())
+            logs["loss/critic"].append(val_loss.item())
 
-        for name, val in grads.items():
-            if '/max' in name:
-                grads[name] = max(val)
-            elif '/std' in name:
-                grads[name] = sum(val) / (len(val) ** .5)
-        return {
-            'ent': torch.stack(logs['ent']).mean(),
-            'clip/frac': torch.stack(logs['clipfrac']).mean(),
-            'loss/actor': torch.stack(logs['loss/actor']).mean(),
-            'loss/critic': torch.stack(logs['loss/critic']).mean(),
-            **grads,
-        }
+        return {k: np.mean(v) for k, v in logs.items()}
