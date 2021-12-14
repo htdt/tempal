@@ -5,16 +5,16 @@ optimizer:
 
 embedding:
     size: 32
-    size_aux: 32
-    history_size: 32
-    epochs: 2
-    batch_size: 2048
+    history_size: 16
+    epochs: 1
+    batch_size: 5000
+    fc_size: 512
     lr: 5e-4
+    tau: 0.1
     temporal_shift: 4
     spatial_shift: 4
-    lamb: 1.1
     pretrain_steps: 1e5
-    pretrain_epochs: 5000
+    pretrain_epochs: 2000
 
 agent:
     pi_clip: .1

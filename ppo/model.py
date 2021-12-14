@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from common.tools import Flatten, init_ortho
+from common.tools import init_ortho
 
 
 class ActorCritic(nn.Module):
@@ -11,7 +11,7 @@ class ActorCritic(nn.Module):
         device: str,
         emb_size: int,
         history_size: int,
-        emb_hidden_size: int = None,
+        emb_fc_size: int,
         input_size: int = 4,
         hidden_size: int = 512,
     ):
@@ -20,39 +20,30 @@ class ActorCritic(nn.Module):
         self.device = device
 
         def with_relu(m):
-            return nn.Sequential(init_ortho(m, 'relu'), nn.ReLU())
+            return nn.Sequential(init_ortho(m, 'relu'), nn.ReLU(True))
 
-        self.conv = nn.Sequential(
+        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
+        self.body = nn.Sequential(
             with_relu(nn.Conv2d(input_size, 32, 8, 4)),
             with_relu(nn.Conv2d(32, 64, 4, 2)),
             with_relu(nn.Conv2d(64, 64, 3, 1)),
-            Flatten())
-        conv_output = 64 * 7 * 7
+            nn.Flatten(),
+            init_ortho(nn.Linear(64 * 7 * 7, hidden_size)),
+            nn.ReLU(True),
+        )
 
-        if emb_hidden_size is not None:
-            self.emb_fc = nn.Sequential(
-                Flatten(),
-                with_relu(nn.Linear(emb_size * history_size, emb_hidden_size))
-            )
-            self.emb_output = emb_hidden_size
-        else:
-            self.emb_fc = Flatten()
-            self.emb_output = emb_size * history_size
+        self.emb_fc = nn.Sequential(
+            nn.Flatten(),
+            init_ortho(nn.Linear(emb_size * history_size, emb_fc_size)),
+            nn.ReLU(True),
+        )
 
-        self.fc = with_relu(
-            nn.Linear(conv_output + self.emb_output, hidden_size))
-        self.pi = init_ortho(nn.Linear(hidden_size, output_size), .01)
-        self.val = init_ortho(nn.Linear(hidden_size, 1))
+        hidden_size = 0
+        self.pi = init_ortho(nn.Linear(hidden_size + emb_fc_size, output_size), 0.01)
+        self.val = init_ortho(nn.Linear(hidden_size + emb_fc_size, 1))
 
     def forward(self, x, x_emb):
-        x = x.float() / 255.
-        x = self.conv(x)
-
-        if (x_emb == 0).all():
-            x_emb = torch.zeros(x.shape[0], self.emb_output).to(self.device)
-        else:
-            x_emb = self.emb_fc(x_emb)
-
-        x = torch.cat([x, x_emb], -1)
-        x = self.fc(x)
+        # x = self.body(x.float() / 255)
+        x = self.emb_fc(x_emb)
+        # x = torch.cat([x, x_emb], -1)
         return Categorical(logits=self.pi(x)), self.val(x)

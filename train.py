@@ -13,7 +13,7 @@ from ppo.model import ActorCritic
 from ppo.runner import EnvRunner
 from ppo.eval import eval_model
 from ppo.runner_rand import random_rollout
-from iic import IIC
+from xent import Xent
 
 
 def train(args):
@@ -21,28 +21,26 @@ def train(args):
     if args.env == "OT":
         envs = make_obstacle_tower(cfg["train"]["num_env"], args.seed)
     else:
-        envs = make_vec_envs(
-            args.env + "NoFrameskip-v4", cfg["train"]["num_env"], args.seed
-        )
+        name = args.env + "NoFrameskip-v4"
+        envs = make_vec_envs(name, cfg["train"]["num_env"], args.seed)
 
     emb = cfg["embedding"]
     model = ActorCritic(
         output_size=envs.action_space.n,
         emb_size=emb["size"],
         history_size=emb["history_size"],
-        emb_hidden_size=emb.get("hidden_size"),
+        emb_fc_size=emb["fc_size"],
         device="cuda",
     )
     model.train().cuda()
 
-    emb_trainer = IIC(
+    emb_trainer = Xent(
         emb_size=emb["size"],
-        emb_size_aux=emb["size_aux"],
         spatial_shift=emb["spatial_shift"],
         temporal_shift=emb["temporal_shift"],
         batch_size=emb["batch_size"],
         lr=emb["lr"],
-        lamb=emb["lamb"],
+        tau=emb["tau"],
     )
 
     optim = ParamOptim(**cfg["optimizer"], params=model.parameters())
@@ -63,7 +61,7 @@ def train(args):
 
     for epoch in trange(emb["pretrain_epochs"]):
         log = emb_trainer.update(iic_buf)
-        if (epoch + 1) % (emb["pretrain"] // 100) == 0:
+        if (epoch + 1) % (emb["pretrain_epochs"] // 100) == 0:
             wandb.log(log)
 
     runner = EnvRunner(
@@ -76,6 +74,7 @@ def train(args):
         device="cuda",
     )
 
+    emb_trainer.encoder.eval()
     if not args.skip_train:
         n_end = int(
             (cfg["train"]["total_steps"] - emb["pretrain_steps"])
@@ -89,8 +88,10 @@ def train(args):
 
             iic_buf[:, iic_cursor] = rollout["obs"][:, :, -1:]
             iic_cursor = (iic_cursor + 1) % iic_buf.shape[1]
+            emb_trainer.encoder.train()
             for epoch in range(emb["epochs"]):
                 emb_log = emb_trainer.update(iic_buf)
+            emb_trainer.encoder.eval()
 
             if (n_iter + 1) % cfg["train"]["log_every"] == 0:
                 wandb.log(
