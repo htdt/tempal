@@ -1,68 +1,69 @@
+from tqdm import trange
 import argparse
 import time
 import torch
 from common.make_env import make_vec_envs
-from common.make_obstacle_tower import make_obstacle_tower
 from common.cfg import load_cfg
-from ppo.model import ActorCritic
-from encoders.iic import Encoder
+from ppo.model import ActorCritic, ActorCriticHistory, ActorCriticInstant
+from xent import Encoder
 
 
 def render(args):
-    cfg = load_cfg(args.cfg)
-    if args.env == 'OT':
-        env = make_obstacle_tower(1, args.seed, True)
-    else:
-        env = make_vec_envs(args.env + 'NoFrameskip-v4', 1)
+    cfg = load_cfg(args.cfg, "cfg")
+    env = make_vec_envs(
+        args.env + "NoFrameskip-v4", 1, cfg["model"]["num_obs"], args.seed
+    )
 
-    emb = cfg['embedding']
-    encoder = Encoder(emb['size'], 6)
-    model = ActorCritic(
-        output_size=env.action_space.n,
-        emb_size=emb['size'],
-        history_size=emb['history_size'],
-        emb_hidden_size=emb.get('hidden_size'),
-        device='cpu',
+    emb = cfg["embedding"]
+    encoder = Encoder(emb["size"])
+    models = {
+        "both": ActorCritic,
+        "history": ActorCriticHistory,
+        "instant": ActorCriticInstant,
+    }
+    model = models[args.mode](
+        **cfg["model"], obs_size=emb["size"], num_action=env.action_space.n
     )
     model.eval()
     encoder.eval()
 
-    dump = torch.load(args.load, map_location='cpu')
+    dump = torch.load(args.load, map_location="cpu")
     model.load_state_dict(dump[0])
     encoder.load_state_dict(dump[1])
-    encoder.head_main = args.head
 
-    obs_emb = torch.zeros(1, emb['history_size'], emb['size'])
+    def model_enc(obs):
+        bs, steps, width, height = obs.shape
+        x = obs.float() / 255
+        x_emb = x.view(bs * steps, 1, width, height)
+        x_emb = encoder(x_emb)
+        x_emb = x_emb.view(bs, steps, x_emb.shape[-1])
+        return model(x[:, -4:], x_emb), x_emb[:, -1]
+
+    emb_stack = []
     obs = env.reset()
-    with torch.no_grad():
-        obs_emb[0, -1] = encoder(obs[:, -1:])
-
-    clusters = []
-    for n_iter in range(args.steps):
+    for _ in trange(args.steps):
         with torch.no_grad():
-            a = model(obs, obs_emb)[0].sample().unsqueeze(1)
-
+            x = model_enc(obs)
+            emb_stack.append(x[1])
+            a = x[0][0].sample().unsqueeze(1)
         obs, r, terms, infos = env.step(a)
-        obs_emb[0, :-1].copy_(obs_emb[0, 1:])
-        obs_emb *= (~terms).float()
-        with torch.no_grad():
-            obs_emb[0, -1] = encoder(obs[:, -1:])
-        c = obs_emb[0, -1].argmax().item()
-        clusters.append(c)
-        print(c)
+        env.render()
+        time.sleep(1 / 10)
 
-        if args.env != 'OT':
-            env.render()
-        time.sleep(1/30)
-    # print(clusters)
+    if args.save:
+        emb_stack = torch.cat(emb_stack)
+        torch.save(emb_stack, "models/emb_stack.pt")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--cfg', type=str, default='plain')
-    parser.add_argument('--env', type=str, default='MsPacman')
-    parser.add_argument('--load', type=str, required=True)
-    parser.add_argument('--head', type=int, choices=[1, 2, 3, 4, 5])
-    parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--steps', type=int, default=1000)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("--cfg", type=str, default="default")
+    parser.add_argument("--env", type=str, default="MsPacman")
+    parser.add_argument("--load", type=str, required=True)
+    parser.add_argument("--steps", type=int, default=1000)
+    parser.add_argument(
+        "--mode", type=str, choices=["both", "instant", "history"], default="history"
+    )
+    parser.add_argument("--save", action="store_true")
+    parser.add_argument("--seed", type=int, default=0)
     render(parser.parse_args())

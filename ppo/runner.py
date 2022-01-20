@@ -14,8 +14,9 @@ class EnvRunner:
 
     encoder: torch.nn.Module
     emb_size: int
-    history_size: int
+    input_size: int
 
+    rnd = True
     ep_reward = []
     ep_len = []
 
@@ -30,6 +31,19 @@ class EnvRunner:
         else:
             return {}
 
+    def model_enc(self, obs):
+        bs, steps, width, height = obs.shape
+        x = obs.float() / 255
+        if self.encoder is None:
+            x_emb = None
+        else:
+            with torch.no_grad():
+                x_emb = x.view(bs * steps, 1, width, height)
+                x_emb = self.encoder(x_emb)
+                x_emb = x_emb.view(bs, steps, x_emb.shape[-1])
+        with torch.no_grad():
+            return self.model(x[:, -4:], x_emb)
+
     def __iter__(self):
         r, n = self.rollout_size, self.envs.num_envs
 
@@ -40,10 +54,6 @@ class EnvRunner:
         obs_dtype = torch.uint8 if len(obs_shape) == 3 else torch.float
         obs = tensor((r + 1, n, *obs_shape), dtype=obs_dtype)
 
-        obs_emb = torch.zeros(
-            r + 1, n, self.history_size, self.emb_size, device=self.device
-        )
-
         rewards = tensor()
         vals = tensor()
         log_probs = tensor()
@@ -52,24 +62,19 @@ class EnvRunner:
 
         obs[0] = self.envs.reset()
         step = 0
-        with torch.no_grad():
-            obs_emb[0, :, -1] = self.encoder(obs[0, :, -1:])
 
         while True:
-            with torch.no_grad():
-                dist, vals[step] = self.model(obs[step], obs_emb[step])
+            if self.rnd:
+                a = [self.envs.action_space.sample() for _ in range(self.envs.num_envs)]
+                actions[step] = torch.tensor(a).unsqueeze(-1)
+            else:
+                dist, vals[step] = self.model_enc(obs[step])
                 a = dist.sample()
                 actions[step] = a.unsqueeze(-1)
                 log_probs[step] = dist.log_prob(a).unsqueeze(-1)
 
             obs[step + 1], rewards[step], terms, infos = self.envs.step(actions[step])
             masks[step] = ~terms
-
-            obs_emb[step + 1, :, :-1].copy_(obs_emb[step, :, 1:])
-            obs_emb[step + 1] *= masks[step, ..., None]
-
-            with torch.no_grad():
-                obs_emb[step + 1, :, -1] = self.encoder(obs[step + 1, :, -1:])
 
             for info in infos:
                 if "episode" in info.keys():
@@ -80,7 +85,6 @@ class EnvRunner:
             if step == 0:
                 yield {
                     "obs": obs,
-                    "obs_emb": obs_emb,
                     "rewards": rewards,
                     "vals": vals,
                     "log_probs": log_probs,
@@ -88,4 +92,3 @@ class EnvRunner:
                     "masks": masks,
                 }
                 obs[0].copy_(obs[-1])
-                obs_emb[0].copy_(obs_emb[-1])

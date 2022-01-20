@@ -9,14 +9,17 @@ class ParamOptim:
     lr: float = 1e-3
     eps: float = 1e-8
     clip_grad: float = None
-    anneal: bool = True
+    anneal: bool = False
+    weight_decay: float = 0
 
     def __post_init__(self):
-        self.optim = torch.optim.Adam(self.params, lr=self.lr, eps=self.eps)
+        self.optim = torch.optim.Adam(
+            self.params, lr=self.lr, eps=self.eps, weight_decay=self.weight_decay
+        )
 
     def set_lr(self, lr):
         for pg in self.optim.param_groups:
-            pg['lr'] = lr
+            pg["lr"] = lr
         return lr
 
     def update(self, progress):

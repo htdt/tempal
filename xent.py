@@ -24,14 +24,15 @@ class Xent:
     temporal_shift: int
     spatial_shift: int
     batch_size: int
-    lr: float
+    optimizer: dict
     tau: float
+    rollouts_in_batch: int
 
     def __post_init__(self):
         self.encoder = Encoder(self.emb_size)
         self.encoder = self.encoder.train().cuda()
         params = list(self.encoder.parameters())
-        self.optim = ParamOptim(params=params, lr=self.lr, clip_grad=1)
+        self.optim = ParamOptim(params=params, **self.optimizer)
 
     def update(self, obs):
         def temporal(x):
@@ -44,7 +45,13 @@ class Xent:
             range(obs.shape[0] - self.temporal_shift), k=self.batch_size
         )
         idx0_shift = list(map(temporal, idx0))
-        idx1 = random.choices(range(obs.shape[1]), k=self.batch_size)
+        if obs.shape[1] <= self.rollouts_in_batch:
+            idx1_min = 0
+            idx1_max = obs.shape[1]
+        else:
+            idx1_min = random.randrange(obs.shape[1] - self.rollouts_in_batch + 1)
+            idx1_max = idx1_min + self.rollouts_in_batch
+        idx1 = random.choices(range(idx1_min, idx1_max), k=self.batch_size)
         idx2 = random.choices(range(obs.shape[2]), k=self.batch_size)
 
         x0, x1 = obs[idx0, idx1, idx2], obs[idx0_shift, idx1, idx2]
@@ -54,36 +61,30 @@ class Xent:
                     shifts = spatial(), spatial()
                     x[n] = torch.roll(x[n], shifts=shifts, dims=(-2, -1))
 
+        x0, x1 = x0.float() / 255, x1.float() / 255
         y0, y1 = self.encoder(x0), self.encoder(x1)
         loss0, acc = xent_loss(y0, y1, self.tau)
         loss1, _ = xent_loss(y1, y0, self.tau)
         loss = loss0 + loss1
         self.optim.step(loss)
-        return {"loss": loss.item(), "acc": acc}
+        return {"xent/loss": loss.item(), "xent/acc": acc}
 
 
 class Encoder(nn.Module):
     def __init__(self, size):
         super().__init__()
 
-        def with_relu(m):
-            return nn.Sequential(init_ortho(m, 'relu'), nn.ReLU(True))
-
         # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
-        self.body = nn.Sequential(
-            with_relu(nn.Conv2d(1, 32, 8, 4)),
-            with_relu(nn.Conv2d(32, 64, 4, 2)),
-            with_relu(nn.Conv2d(64, 64, 3, 1)),
+        self.net = nn.Sequential(
+            init_ortho(nn.Conv2d(1, 32, 8, 4), "relu"),
+            nn.ReLU(True),
+            init_ortho(nn.Conv2d(32, 64, 4, 2), "relu"),
+            nn.ReLU(True),
+            init_ortho(nn.Conv2d(64, 32, 3, 1), "relu"),
+            nn.ReLU(True),
             nn.Flatten(),
-            with_relu(nn.Linear(64 * 7 * 7, 512)),
-            init_ortho(nn.Linear(512, size)),
-            NormLayer(),
+            init_ortho(nn.Linear(32 * 7 * 7, size)),
         )
 
     def forward(self, x):
-        return self.body(x.float() / 255)
-
-
-class NormLayer(nn.Module):
-    def forward(self, x):
-        return F.normalize(x, p=2, dim=1)
+        return F.normalize(self.net(x), p=2, dim=1)

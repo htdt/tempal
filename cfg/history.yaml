@@ -1,0 +1,39 @@
+embedding:
+    pretrain:
+        steps: 1e5
+        epochs: 2500
+    optimizer:
+        lr: 2e-4
+    size: 32
+    epochs: 1
+    batch_size: 2048
+    tau: 0.1
+    temporal_shift: 4
+    spatial_shift: 4
+    rollouts_in_batch: 5
+
+model:
+    num_obs: 16
+    obs_hidden: 4
+    history_fc: 512
+    instant_fc: 0
+
+agent:
+    optimizer:
+        lr: 2e-4
+        clip_grad: 1
+    pi_clip: 0.1
+    gamma: 0.99
+    epochs: 3
+    batch_size: 256
+    ent_k: 0.01
+    val_loss_k: 1
+    gae_lambda: 0.95
+
+train:
+    max_ep_steps: 108000
+    clip_rewards: True
+    total_steps: 1e7
+    rollout_size: 128
+    num_env: 8
+    log_every: 10

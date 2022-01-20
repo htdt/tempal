@@ -11,7 +11,8 @@ from ppo.model import ActorCritic
 @dataclass
 class Agent:
     model: ActorCritic
-    optim: ParamOptim
+    encoder: torch.nn.Module
+    optimizer: dict
     pi_clip: float
     epochs: int
     batch_size: int
@@ -19,6 +20,10 @@ class Agent:
     ent_k: float
     gamma: float
     gae_lambda: float
+    anneal: bool = False
+
+    def __post_init__(self):
+        self.optim = ParamOptim(**self.optimizer, params=self.model.parameters())
 
     def _gae(self, rollout, last_val):
         m = rollout["masks"] * self.gamma
@@ -35,15 +40,26 @@ class Agent:
         adv = (adv - adv.mean()) / (adv.std() + 1e-8)
         return adv, returns
 
+    def model_enc(self, obs):
+        bs, steps, width, height = obs.shape
+        x = obs.float() / 255
+        if self.encoder is None:
+            x_emb = None
+        else:
+            with torch.no_grad():
+                x_emb = x.view(bs * steps, 1, width, height)
+                x_emb = self.encoder(x_emb)
+                x_emb = x_emb.view(bs, steps, x_emb.shape[-1])
+        return self.model(x[:, -4:], x_emb)
+
     def update(self, rollout, progress=0):
-        clip = self.pi_clip * (1 - progress)
+        clip = self.pi_clip * (1 - progress * self.anneal)
         num_step, num_env = rollout["log_probs"].shape[:2]
         with torch.no_grad():
-            next_val = self.model(rollout["obs"][-1], rollout["obs_emb"][-1])[1]
+            next_val = self.model_enc(rollout["obs"][-1])[1]
         adv, returns = self._gae(rollout, next_val)
 
         logs = defaultdict(list)
-
         num_samples = self.epochs * num_step * num_env
         idx1 = random.choices(range(num_step), k=num_samples)
         idx2 = random.choices(range(num_env), k=num_samples)
@@ -52,7 +68,7 @@ class Agent:
             s = slice(n_iter * self.batch_size, (n_iter + 1) * self.batch_size)
             idx = idx1[s], idx2[s]
 
-            dist, vals = self.model(rollout["obs"][idx], rollout["obs_emb"][idx])
+            dist, vals = self.model_enc(rollout["obs"][idx])
             act = rollout["actions"][idx].squeeze(-1)
             log_probs = dist.log_prob(act).unsqueeze(-1)
             ent = dist.entropy().mean()

@@ -1,49 +1,61 @@
-import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 from common.tools import init_ortho
 
 
-class ActorCritic(nn.Module):
-    def __init__(
-        self,
-        output_size: int,
-        device: str,
-        emb_size: int,
-        history_size: int,
-        emb_fc_size: int,
-        input_size: int = 4,
-        hidden_size: int = 512,
-    ):
-        super(ActorCritic, self).__init__()
-        self.output_size = output_size
-        self.device = device
+class ActorCriticHistory(nn.Module):
+    def __init__(self, num_obs, obs_size, obs_hidden, history_fc, num_action, **kwargs):
+        super().__init__()
 
-        def with_relu(m):
-            return nn.Sequential(init_ortho(m, 'relu'), nn.ReLU(True))
+        def net(out, gain):
+            return nn.Sequential(
+                init_ortho(nn.Conv1d(num_obs, obs_hidden, 1), "relu"),
+                nn.ReLU(True),
+                nn.Flatten(),
+                init_ortho(nn.Linear(obs_hidden * obs_size, history_fc), "relu"),
+                nn.ReLU(True),
+                init_ortho(nn.Linear(history_fc, out), gain),
+            )
 
-        # 84 x 84 -> 20 x 20 -> 9 x 9 -> 7 x 7
-        self.body = nn.Sequential(
-            with_relu(nn.Conv2d(input_size, 32, 8, 4)),
-            with_relu(nn.Conv2d(32, 64, 4, 2)),
-            with_relu(nn.Conv2d(64, 64, 3, 1)),
-            nn.Flatten(),
-            init_ortho(nn.Linear(64 * 7 * 7, hidden_size)),
-            nn.ReLU(True),
-        )
-
-        self.emb_fc = nn.Sequential(
-            nn.Flatten(),
-            init_ortho(nn.Linear(emb_size * history_size, emb_fc_size)),
-            nn.ReLU(True),
-        )
-
-        hidden_size = 0
-        self.pi = init_ortho(nn.Linear(hidden_size + emb_fc_size, output_size), 0.01)
-        self.val = init_ortho(nn.Linear(hidden_size + emb_fc_size, 1))
+        self.pi = net(num_action, 0.01)
+        self.val = net(1, 1)
 
     def forward(self, x, x_emb):
-        # x = self.body(x.float() / 255)
-        x = self.emb_fc(x_emb)
-        # x = torch.cat([x, x_emb], -1)
+        return Categorical(logits=self.pi(x_emb)), self.val(x_emb)
+
+
+class ActorCriticInstant(nn.Module):
+    def __init__(self, instant_fc, num_action, **kwargs):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            init_ortho(nn.Conv2d(4, 32, 8, 4), "relu"),
+            nn.ReLU(True),
+            init_ortho(nn.Conv2d(32, 64, 4, 2), "relu"),
+            nn.ReLU(True),
+            init_ortho(nn.Conv2d(64, 64, 3, 1), "relu"),
+            nn.ReLU(True),
+            nn.Flatten(),
+            init_ortho(nn.Linear(64 * 7 * 7, instant_fc), "relu"),
+            nn.ReLU(True),
+        )
+        self.val = init_ortho(nn.Linear(instant_fc, 1))
+        self.pi = init_ortho(nn.Linear(instant_fc, num_action), 0.01)
+
+    def forward(self, x, x_emb):
+        x = self.encoder(x)
         return Categorical(logits=self.pi(x)), self.val(x)
+
+
+class ActorCritic(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.history = ActorCriticHistory(**kwargs)
+        self.instant = ActorCriticInstant(**kwargs)
+
+    def forward(self, x, x_emb):
+        pi_h = self.history.pi(x_emb)
+        val_h = self.history.val(x_emb)
+        x = self.instant.encoder(x)
+        pi_i = self.instant.pi(x)
+        val_i = self.instant.val(x)
+        return Categorical(logits=(pi_h + pi_i) / 2), (val_h + val_i) / 2
