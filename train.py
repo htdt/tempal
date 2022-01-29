@@ -136,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--cfg", type=str, default="default")
     parser.add_argument("--env", type=str, default="MsPacman")
     parser.add_argument(
-        "--mode", type=str, choices=["both", "instant", "history"], default="history"
+        "--mode", type=str, choices=["both", "instant", "history"], default="both"
     )
     parser.add_argument("--seed", type=int, default=0)
     train(parser.parse_args())

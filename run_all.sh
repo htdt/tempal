@@ -1,49 +1,49 @@
-python -m ppo.train --cfg iic --env Alien
-python -m ppo.train --cfg iic --env Amidar
-python -m ppo.train --cfg iic --env Assault
-python -m ppo.train --cfg iic --env Asterix
-python -m ppo.train --cfg iic --env Asteroids
-python -m ppo.train --cfg iic --env Atlantis
-python -m ppo.train --cfg iic --env BankHeist
-python -m ppo.train --cfg iic --env BattleZone
-python -m ppo.train --cfg iic --env BeamRider
-python -m ppo.train --cfg iic --env Bowling
-python -m ppo.train --cfg iic --env Boxing
-python -m ppo.train --cfg iic --env Breakout
-python -m ppo.train --cfg iic --env Centipede
-python -m ppo.train --cfg iic --env ChopperCommand
-python -m ppo.train --cfg iic --env CrazyClimber
-python -m ppo.train --cfg iic --env DemonAttack
-python -m ppo.train --cfg iic --env DoubleDunk
-python -m ppo.train --cfg iic --env Enduro
-python -m ppo.train --cfg iic --env FishingDerby
-python -m ppo.train --cfg iic --env Freeway
-python -m ppo.train --cfg iic --env Frostbite
-python -m ppo.train --cfg iic --env Gopher
-python -m ppo.train --cfg iic --env Gravitar
-python -m ppo.train --cfg iic --env IceHockey
-python -m ppo.train --cfg iic --env Jamesbond
-python -m ppo.train --cfg iic --env Kangaroo
-python -m ppo.train --cfg iic --env Krull
-python -m ppo.train --cfg iic --env KungFuMaster
-python -m ppo.train --cfg iic --env MontezumaRevenge
-python -m ppo.train --cfg iic --env MsPacman
-python -m ppo.train --cfg iic --env NameThisGame
-python -m ppo.train --cfg iic --env Pitfall
-python -m ppo.train --cfg iic --env Pong
-python -m ppo.train --cfg iic --env PrivateEye
-python -m ppo.train --cfg iic --env Qbert
-python -m ppo.train --cfg iic --env Riverraid
-python -m ppo.train --cfg iic --env RoadRunner
-python -m ppo.train --cfg iic --env Robotank
-python -m ppo.train --cfg iic --env Seaquest
-python -m ppo.train --cfg iic --env SpaceInvaders
-python -m ppo.train --cfg iic --env StarGunner
-python -m ppo.train --cfg iic --env Tennis
-python -m ppo.train --cfg iic --env TimePilot
-python -m ppo.train --cfg iic --env Tutankham
-python -m ppo.train --cfg iic --env UpNDown
-python -m ppo.train --cfg iic --env Venture
-python -m ppo.train --cfg iic --env VideoPinball
-python -m ppo.train --cfg iic --env WizardOfWor
-python -m ppo.train --cfg iic --env Zaxxon
+python -m ppo.train --env Alien
+python -m ppo.train --env Amidar
+python -m ppo.train --env Assault
+python -m ppo.train --env Asterix
+python -m ppo.train --env Asteroids
+python -m ppo.train --env Atlantis
+python -m ppo.train --env BankHeist
+python -m ppo.train --env BattleZone
+python -m ppo.train --env BeamRider
+python -m ppo.train --env Bowling
+python -m ppo.train --env Boxing
+python -m ppo.train --env Breakout
+python -m ppo.train --env Centipede
+python -m ppo.train --env ChopperCommand
+python -m ppo.train --env CrazyClimber
+python -m ppo.train --env DemonAttack
+python -m ppo.train --env DoubleDunk
+python -m ppo.train --env Enduro
+python -m ppo.train --env FishingDerby
+python -m ppo.train --env Freeway
+python -m ppo.train --env Frostbite
+python -m ppo.train --env Gopher
+python -m ppo.train --env Gravitar
+python -m ppo.train --env IceHockey
+python -m ppo.train --env Jamesbond
+python -m ppo.train --env Kangaroo
+python -m ppo.train --env Krull
+python -m ppo.train --env KungFuMaster
+python -m ppo.train --env MontezumaRevenge
+python -m ppo.train --env MsPacman
+python -m ppo.train --env NameThisGame
+python -m ppo.train --env Pitfall
+python -m ppo.train --env Pong
+python -m ppo.train --env PrivateEye
+python -m ppo.train --env Qbert
+python -m ppo.train --env Riverraid
+python -m ppo.train --env RoadRunner
+python -m ppo.train --env Robotank
+python -m ppo.train --env Seaquest
+python -m ppo.train --env SpaceInvaders
+python -m ppo.train --env StarGunner
+python -m ppo.train --env Tennis
+python -m ppo.train --env TimePilot
+python -m ppo.train --env Tutankham
+python -m ppo.train --env UpNDown
+python -m ppo.train --env Venture
+python -m ppo.train --env VideoPinball
+python -m ppo.train --env WizardOfWor
+python -m ppo.train --env Zaxxon
